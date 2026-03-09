@@ -1,0 +1,20 @@
+# Secrets — never bake these into the image
+config/.env
+**/.env
+*.env
+
+# Dependencies (installed fresh in Docker)
+**/node_modules
+
+# Logs
+npm-debug.log*
+
+# Git
+.git
+.gitignore
+
+# Docs and non-runtime files
+docs/
+config/examples/
+apps/*/README.md
+README.md

@@ -1,0 +1,47 @@
+We are NOT building full production onboarding yet.
+
+Act as a senior platform engineer and design the smallest useful onboarding foundation for this multi-tenant AI voice platform.
+
+Context:
+- Phase 1 uses local tenant JSON files in `config/tenants/`
+- The bridge is shared and multi-tenant
+- n8n still handles Telnyx webhooks
+- Firestore and Cloud Storage integration will come later
+- We want onboarding to become mostly config/data driven, not code driven
+
+Your task:
+Create the first onboarding layer for local development and early platform use.
+
+Scope:
+1. Define a clear onboarding input contract for a new tenant.
+2. Create a simple onboarding artifact format (JSON or YAML) that a human or AI can fill in.
+3. Create a small script or scaffold flow that takes onboarding input and generates:
+   - a tenant config file in `config/tenants/`
+   - a tenant asset folder structure for audio files
+   - any placeholders needed for future Cloud Storage migration
+4. Keep it local-file based only.
+5. Do not add Firestore yet.
+6. Do not add Cloud Storage upload logic yet.
+7. Do not change bridge runtime behavior.
+8. Do not change n8n.
+
+The goal is:
+- New tenant = run one onboarding flow locally
+- No manual editing of multiple random files
+- Future migration to Firestore/Cloud Storage should be easy
+
+Constraints:
+- Keep the implementation minimal
+- Prefer readability over abstraction
+- Do not overengineer
+- Do not add a UI
+- Do not add AI orchestration yet
+- Only build the foundation for future automatic onboarding
+
+Output format:
+A. "Onboarding foundation goal"
+B. "Recommended onboarding input schema"
+C. "Files/scripts to create"
+D. "Implementation plan"
+E. "Execute only the first onboarding sequence"
+F. "Files changed"

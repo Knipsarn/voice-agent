@@ -1,0 +1,8 @@
+# Normalize line endings: store as LF, checkout as LF on all platforms
+# (Dockerfile and shell scripts must not have CRLF in the container)
+* text=auto eol=lf
+*.json text eol=lf
+*.js text eol=lf
+*.md text eol=lf
+Dockerfile text eol=lf
+.env* text eol=lf
