@@ -130,15 +130,40 @@ Run from the repo root.
 
 ### Commands
 ```
-node scripts/ops/health.js                          # Check control-plane is reachable
-node scripts/ops/tenants-list.js                    # List all tenants (summary)
-node scripts/ops/tenant-get.js      <tenantId>      # Full Firestore document
-node scripts/ops/tenant-meta.js     <tenantId>      # _meta stamp only
-node scripts/ops/tenant-diff.js     <tenantId>      # Local vs Firestore diff
-node scripts/ops/tenant-publish.js  <tenantId> [--dry-run]  # Publish to Firestore
-node scripts/ops/tenant-logs.js     <tenantId> [limit]      # Recent call logs
-node scripts/ops/tenant-errors.js   <tenantId> [limit]      # Errors/warnings only
+node scripts/ops/health.js                                        # Check control-plane is reachable
+node scripts/ops/tenants-list.js                                  # List all tenants (summary)
+node scripts/ops/tenant-get.js      <tenantId>                    # Full Firestore document
+node scripts/ops/tenant-meta.js     <tenantId>                    # _meta stamp only
+node scripts/ops/tenant-diff.js     <tenantId>                    # Local vs Firestore diff
+node scripts/ops/tenant-publish.js  <tenantId> [--dry-run]        # Publish to Firestore
+node scripts/ops/tenant-calls.js    <tenantId> [--limit=20] [--since=<ISO>]            # Recent call summaries (trace_id per call)
+node scripts/ops/tenant-logs.js     <tenantId> [--limit=50] [--trace_id=<uuid>] [--since=<ISO>]  # Full logs, filterable by call
+node scripts/ops/tenant-errors.js   <tenantId> [--limit=50] [--trace_id=<uuid>] [--since=<ISO>]  # Errors/warnings only
 ```
+
+### Typical debug flow with structured tracing
+```
+1. tenant-calls.js <id>                    # get list of recent calls + trace_ids
+2. tenant-logs.js <id> --trace_id=<uuid>   # drill into one specific call
+3. tenant-errors.js <id> --trace_id=<uuid> # errors for that call only
+```
+
+### Structured log events (jsonPayload.event)
+| Event | When | Key fields |
+|-------|------|------------|
+| `call_start` | Call connects | `trace_id`, `tenant_id`, `voice`, `entry_mode`, `fallback`, `config_git_sha`, `instructions_length` |
+| `openai_ready` | OpenAI WS open | `trace_id`, `latency_ms` |
+| `first_message` | First message sent | `trace_id` |
+| `speech_started` | Caller starts speaking | `trace_id`, `turn_user` |
+| `speech_stopped` | Caller stops speaking | `trace_id` |
+| `audio_committed` | Audio buffer committed | `trace_id` |
+| `user_turn` | User turn completed | `trace_id`, `turn_user` |
+| `response_started` | AI starts responding | `trace_id`, `turn_assistant` |
+| `first_audio_token` | First AI audio out | `trace_id`, `latency_ms` |
+| `response_done` | AI response complete | `trace_id`, `turn_assistant` |
+| `call_end` | Call disconnects | `trace_id`, `duration_ms`, `turn_count_user`, `turn_count_assistant` |
+| `openai_error` | OpenAI returned error | `trace_id`, `error` |
+| `telnyx_ws_error` | Telnyx WS error | `trace_id`, `error` |
 
 ### Configuration
 Set in `config/.env`:

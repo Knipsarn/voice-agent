@@ -7,8 +7,21 @@ const express = require("express");
 const http = require("http");
 const { WebSocketServer, WebSocket } = require("ws");
 const url = require("url");
+const crypto = require("crypto");
 
 const { loadTenant, buildInstructions } = require("./tenantLoader");
+
+// ─── Structured logging ───────────────────────────────────────────────────────
+// Output JSON so Cloud Logging ingests as jsonPayload (queryable by field).
+// Usage: log("call_start", { trace_id, tenant_id, ... })
+
+function log(event, fields = {}) {
+  console.log(JSON.stringify({ event, ...fields }));
+}
+
+function logError(event, fields = {}) {
+  console.error(JSON.stringify({ event, severity: "ERROR", ...fields }));
+}
 
 // ─── Startup constants ────────────────────────────────────────────────────────
 
@@ -21,15 +34,15 @@ const FALLBACK_INSTRUCTIONS = "You are a helpful phone assistant.";
 // ─── Startup validation ───────────────────────────────────────────────────────
 
 if (!OPENAI_API_KEY) {
-  console.error("[startup] FATAL: OPENAI_API_KEY is not set. Exiting.");
+  console.error(JSON.stringify({ event: "startup_fatal", error: "OPENAI_API_KEY is not set" }));
   process.exit(1);
 }
 
 if (!DEFAULT_TENANT_ID) {
-  console.warn("[startup] WARNING: DEFAULT_TENANT_ID not set — calls without ?tenant= will use hardcoded fallback.");
+  console.warn(JSON.stringify({ event: "startup_warning", message: "DEFAULT_TENANT_ID not set — calls without ?tenant= will use hardcoded fallback" }));
 }
 
-console.log(`[startup] Default model: ${DEFAULT_REALTIME_MODEL} | Default tenant: ${DEFAULT_TENANT_ID || "(none)"}`);
+log("startup", { model: DEFAULT_REALTIME_MODEL, default_tenant: DEFAULT_TENANT_ID || null });
 
 // ─── HTTP + WebSocket server ──────────────────────────────────────────────────
 
@@ -45,31 +58,44 @@ const wss = new WebSocketServer({ server });
 // ─── Per-connection handler ───────────────────────────────────────────────────
 
 wss.on("connection", async (telnyxWs, req) => {
+  const trace_id = crypto.randomUUID();
+  const callStart = Date.now();
+  let openaiReadyTime = null;
+  let firstAudioSent = false;
+  let turnCountUser = 0;
+  let turnCountAssistant = 0;
+
   // --- Tenant resolution ---
   const query = url.parse(req.url, true).query;
   const tenantId = query.tenant || DEFAULT_TENANT_ID;
 
   const tenantConfig = tenantId ? await loadTenant(tenantId) : null;
-  const usingFallback = !tenantConfig;
+  const fallback = !tenantConfig;
 
-  const instructions = usingFallback
+  const instructions = fallback
     ? FALLBACK_INSTRUCTIONS
     : buildInstructions(tenantConfig);
 
   const voice = tenantConfig?.voice || DEFAULT_VOICE;
   const realtimeModel = tenantConfig?.realtime_model || DEFAULT_REALTIME_MODEL;
   const entryMode = tenantConfig?.entry_mode || "unknown";
-
-  // First-message: enabled only when tenant config is loaded and field is set
-  const firstMessage = !usingFallback && tenantConfig.first_message_enabled
+  const firstMessage = !fallback && tenantConfig.first_message_enabled
     ? (tenantConfig.first_message || null)
     : null;
-
   const transcriptionLanguage = tenantConfig?.transcription_language || null;
 
-  console.log(
-    `[bridge] connection — tenant: ${tenantId || "(none)"} | model: ${realtimeModel} | voice: ${voice} | entry_mode: ${entryMode} | first_message: ${!!firstMessage} | fallback: ${usingFallback}`
-  );
+  log("call_start", {
+    trace_id,
+    tenant_id: tenantId || null,
+    model: realtimeModel,
+    voice,
+    entry_mode: entryMode,
+    first_message: !!firstMessage,
+    fallback,
+    config_git_sha: tenantConfig?._meta?.git_sha || null,
+    config_published_at: tenantConfig?._meta?.published_at || null,
+    instructions_length: instructions.length,
+  });
 
   // --- OpenAI Realtime session ---
   const openaiWs = new WebSocket(
@@ -85,8 +111,14 @@ wss.on("connection", async (telnyxWs, req) => {
   let openaiReady = false;
 
   openaiWs.on("open", () => {
-    console.log(`[bridge] OpenAI ready — tenant: ${tenantId || "(none)"}`);
     openaiReady = true;
+    openaiReadyTime = Date.now();
+
+    log("openai_ready", {
+      trace_id,
+      tenant_id: tenantId || null,
+      latency_ms: openaiReadyTime - callStart,
+    });
 
     // Audio codec path: g711_ulaw in and out — do not change
     const sessionPayload = {
@@ -103,11 +135,8 @@ wss.on("connection", async (telnyxWs, req) => {
     openaiWs.send(JSON.stringify({ type: "session.update", session: sessionPayload }));
 
     // Trigger first_message using a per-response instruction override.
-    // This is more reliable than embedding a cue in session instructions:
-    // the response-level instruction targets only this one response and
-    // does not pollute the session persona for the rest of the conversation.
     if (firstMessage) {
-      console.log(`[bridge] first_message triggered — tenant: ${tenantId}`);
+      log("first_message", { trace_id, tenant_id: tenantId });
       openaiWs.send(JSON.stringify({
         type: "response.create",
         response: {
@@ -124,7 +153,7 @@ wss.on("connection", async (telnyxWs, req) => {
 
       if (!openaiReady) return;
 
-      if (msg.event === "media" && msg.media && msg.media.payload) {
+      if (msg.event === "media" && msg.media?.payload) {
         openaiWs.send(JSON.stringify({
           type: "input_audio_buffer.append",
           audio: msg.media.payload
@@ -135,7 +164,7 @@ wss.on("connection", async (telnyxWs, req) => {
         openaiWs.close();
       }
     } catch (err) {
-      console.error(`[bridge] Telnyx parse error — tenant: ${tenantId || "(none)"}:`, err.message);
+      logError("telnyx_parse_error", { trace_id, tenant_id: tenantId || null, error: err.message });
     }
   });
 
@@ -144,20 +173,74 @@ wss.on("connection", async (telnyxWs, req) => {
     try {
       const msg = JSON.parse(raw.toString());
 
-      if (msg.type === "response.audio.delta" && msg.delta) {
-        telnyxWs.send(JSON.stringify({
-          event: "media",
-          media: { payload: msg.delta }
-        }));
+      switch (msg.type) {
+        case "input_audio_buffer.speech_started":
+          log("speech_started", { trace_id, tenant_id: tenantId || null, turn_user: turnCountUser + 1 });
+          break;
+
+        case "input_audio_buffer.speech_stopped":
+          log("speech_stopped", { trace_id, tenant_id: tenantId || null });
+          break;
+
+        case "input_audio_buffer.committed":
+          log("audio_committed", { trace_id, tenant_id: tenantId || null });
+          break;
+
+        case "conversation.item.created":
+          if (msg.item?.role === "user") {
+            turnCountUser++;
+            log("user_turn", { trace_id, tenant_id: tenantId || null, turn_user: turnCountUser });
+          }
+          break;
+
+        case "response.created":
+          log("response_started", { trace_id, tenant_id: tenantId || null, turn_assistant: turnCountAssistant + 1 });
+          break;
+
+        case "response.audio.delta":
+          if (msg.delta) {
+            if (!firstAudioSent) {
+              firstAudioSent = true;
+              log("first_audio_token", {
+                trace_id,
+                tenant_id: tenantId || null,
+                latency_ms: Date.now() - callStart,
+              });
+            }
+            telnyxWs.send(JSON.stringify({
+              event: "media",
+              media: { payload: msg.delta }
+            }));
+          }
+          break;
+
+        case "response.done":
+          turnCountAssistant++;
+          log("response_done", { trace_id, tenant_id: tenantId || null, turn_assistant: turnCountAssistant });
+          break;
+
+        case "error":
+          logError("openai_error", {
+            trace_id,
+            tenant_id: tenantId || null,
+            error: msg.error?.message || JSON.stringify(msg.error),
+          });
+          break;
       }
     } catch (err) {
-      console.error(`[bridge] OpenAI parse error — tenant: ${tenantId || "(none)"}:`, err.message);
+      logError("openai_parse_error", { trace_id, tenant_id: tenantId || null, error: err.message });
     }
   });
 
   // --- Cleanup ---
   telnyxWs.on("close", () => {
-    console.log(`[bridge] Telnyx disconnected — tenant: ${tenantId || "(none)"}`);
+    log("call_end", {
+      trace_id,
+      tenant_id: tenantId || null,
+      duration_ms: Date.now() - callStart,
+      turn_count_user: turnCountUser,
+      turn_count_assistant: turnCountAssistant,
+    });
     try { openaiWs.close(); } catch (_) {}
   });
 
@@ -166,10 +249,11 @@ wss.on("connection", async (telnyxWs, req) => {
   });
 
   telnyxWs.on("error", (err) =>
-    console.error(`[bridge] Telnyx WS error — tenant: ${tenantId || "(none)"}:`, err.message)
+    logError("telnyx_ws_error", { trace_id, tenant_id: tenantId || null, error: err.message })
   );
+
   openaiWs.on("error", (err) =>
-    console.error(`[bridge] OpenAI WS error — tenant: ${tenantId || "(none)"}:`, err.message)
+    logError("openai_ws_error", { trace_id, tenant_id: tenantId || null, error: err.message })
   );
 });
 
@@ -177,5 +261,5 @@ wss.on("connection", async (telnyxWs, req) => {
 
 const port = process.env.PORT || 8080;
 server.listen(port, () => {
-  console.log(`[bridge] listening on ${port}`);
+  log("startup_complete", { port });
 });
