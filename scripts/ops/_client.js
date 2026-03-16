@@ -5,7 +5,21 @@
  * Reads CONTROL_PLANE_BASE_URL and CONTROL_PLANE_API_KEY from env or config/.env.
  */
 
-require("dotenv").config({ path: require("path").join(__dirname, "../../config/.env") });
+// Load config/.env without requiring dotenv — uses only built-in Node modules
+try {
+  const fs = require("fs");
+  const envPath = require("path").join(__dirname, "../../config/.env");
+  const lines = fs.readFileSync(envPath, "utf8").split("\n");
+  for (const line of lines) {
+    const trimmed = line.trim();
+    if (!trimmed || trimmed.startsWith("#")) continue;
+    const eq = trimmed.indexOf("=");
+    if (eq < 1) continue;
+    const key = trimmed.slice(0, eq).trim();
+    const val = trimmed.slice(eq + 1).trim().replace(/^["']|["']$/g, "");
+    if (!(key in process.env)) process.env[key] = val;
+  }
+} catch {}
 
 const BASE_URL = process.env.CONTROL_PLANE_BASE_URL || "http://localhost:4000";
 const API_KEY  = process.env.CONTROL_PLANE_API_KEY;
@@ -52,4 +66,15 @@ function print(res) {
   console.log(JSON.stringify(res.body, null, 2));
 }
 
-module.exports = { get, post, print, BASE_URL };
+function handleError(err) {
+  if (err.code === "ECONNREFUSED") {
+    console.error(`[ops] Connection refused: ${BASE_URL}`);
+    console.error(`[ops] Is the control-plane running? Try: node apps/control-plane/index.js`);
+    console.error(`[ops] Or set CONTROL_PLANE_BASE_URL in config/.env to the Cloud Run URL`);
+  } else {
+    console.error(`[ops] ${err.message}`);
+  }
+  process.exit(1);
+}
+
+module.exports = { get, post, print, handleError, BASE_URL };

@@ -4,7 +4,7 @@
  *
  * Always diff first: node scripts/ops/tenant-diff.js <tenantId>
  */
-const { post, print } = require("./_client");
+const { post, print, handleError } = require("./_client");
 
 const tenantId = process.argv[2];
 const dryRun   = process.argv.includes("--dry-run");
@@ -13,4 +13,4 @@ if (!tenantId) { console.error("Usage: node scripts/ops/tenant-publish.js <tenan
 
 post(`/tenants/${tenantId}/publish`, { dry_run: dryRun })
   .then(print)
-  .catch(err => { console.error(err.message); process.exit(1); });
+  .catch(handleError);
