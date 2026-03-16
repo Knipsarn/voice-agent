@@ -8,5 +8,21 @@ steps:
       - gcr.io/ldk-clean/control-plane-service
       - .
 
+  - name: 'gcr.io/cloud-builders/docker'
+    args:
+      - push
+      - gcr.io/ldk-clean/control-plane-service
+
+  - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
+    entrypoint: gcloud
+    args:
+      - run
+      - deploy
+      - control-plane-service
+      - --image=gcr.io/ldk-clean/control-plane-service:latest
+      - --region=europe-west1
+      - --project=ldk-clean
+      - --quiet
+
 images:
   - gcr.io/ldk-clean/control-plane-service
