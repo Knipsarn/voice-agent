@@ -1,0 +1,39 @@
+{
+  "tenant_id": "enkla-juridik",
+  "status": "draft",
+  "company_name": "Enkla Juridik",
+  "default_language": "sv-SE",
+  "voice": "marin",
+  "realtime_model": "gpt-realtime-1.5",
+  "transcription_language": "sv",
+  "entry_mode": "direct_to_gpt",
+  "first_message_enabled": true,
+  "first_message": "Hejsan mitt namn är Aila, Enkla Juridiks AI-receptionist. Hur kan vi hjälpa dig idag?",
+  "instructions": {
+    "base": "$file:configs/prompt-assets/enkla-juridik/main-prompt.md",
+    "default_mode": "INTAKE"
+  },
+  "modes": {
+    "INTAKE": {
+      "label": "Ärendeintag",
+      "unlock_blocks": ["category_policies", "guardrails"]
+    }
+  },
+  "knowledge_blocks": {
+    "category_policies": "$file:configs/prompt-assets/enkla-juridik/category-policies.md",
+    "guardrails": "$file:configs/prompt-assets/enkla-juridik/guardrails.md"
+  },
+  "phone_numbers": {
+    "primary_e164": "+46700000000"
+  },
+  "pbx": {
+    "enabled": false,
+    "ai_option_digit": null,
+    "voicemail_option_digit": null
+  },
+  "features": {
+    "direct_to_gpt": true,
+    "barge_in": true,
+    "mode_switching": false
+  }
+}
