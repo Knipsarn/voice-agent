@@ -161,4 +161,71 @@ router.get("/calls/:id", async (req, res) => {
   }
 });
 
+// ── GET /logs/stats/:id — aggregate call statistics ──────────────────────────
+// Aggregates call_end events to produce call volume, duration, turn, error stats.
+// Query params:
+//   ?days=7      — look back N days (default 7, max 30)
+//   ?since=<ISO> — explicit lower bound (overrides ?days)
+router.get("/stats/:id", async (req, res) => {
+  const tenantId = req.params.id;
+  if (!isValidTenantId(tenantId)) {
+    return res.status(400).json({ error: "Invalid tenant ID format" });
+  }
+
+  const days  = Math.min(parseInt(req.query.days) || 7, 30);
+  const since = req.query.since || new Date(Date.now() - days * 86400 * 1000).toISOString();
+
+  try {
+    // Fetch call_end events (carry duration + turn counts)
+    const endFilter = [
+      `resource.type="cloud_run_revision"`,
+      `resource.labels.service_name="${SERVICE_NAME}"`,
+      `jsonPayload.tenant_id="${tenantId}"`,
+      `jsonPayload.event="call_end"`,
+      `timestamp>="${since}"`,
+    ].join("\n");
+
+    // Fetch error events separately
+    const errFilter = [
+      `resource.type="cloud_run_revision"`,
+      `resource.labels.service_name="${SERVICE_NAME}"`,
+      `jsonPayload.tenant_id="${tenantId}"`,
+      `severity>=WARNING`,
+      `timestamp>="${since}"`,
+    ].join("\n");
+
+    const [[endEntries], [errEntries]] = await Promise.all([
+      logging.getEntries({ filter: endFilter, orderBy: "timestamp desc", pageSize: MAX_LIMIT }),
+      logging.getEntries({ filter: errFilter, orderBy: "timestamp desc", pageSize: MAX_LIMIT }),
+    ]);
+
+    const calls = endEntries.map(e => e.data && typeof e.data === "object" ? e.data : {});
+
+    const call_count       = calls.length;
+    const durations        = calls.map(c => c.duration_ms).filter(Number.isFinite);
+    const avg_duration_ms  = durations.length ? Math.round(durations.reduce((a, b) => a + b, 0) / durations.length) : null;
+    const total_duration_ms= durations.reduce((a, b) => a + b, 0);
+    const avg_turns_user   = calls.length ? +(calls.reduce((a, c) => a + (c.turn_count_user || 0), 0) / calls.length).toFixed(1) : null;
+    const avg_turns_agent  = calls.length ? +(calls.reduce((a, c) => a + (c.turn_count_assistant || 0), 0) / calls.length).toFixed(1) : null;
+    const fallback_count   = calls.filter(c => c.fallback).length;
+    const error_count      = errEntries.length;
+
+    res.json({
+      tenant_id: tenantId,
+      service: SERVICE_NAME,
+      period: { since, days },
+      call_count,
+      avg_duration_ms,
+      total_duration_ms,
+      avg_turns_user,
+      avg_turns_agent,
+      fallback_count,
+      error_count,
+    });
+  } catch (err) {
+    console.error(JSON.stringify({ event: "logs_error", route: `/logs/stats/${tenantId}`, error: err.message }));
+    res.status(500).json({ error: err.message });
+  }
+});
+
 module.exports = router;

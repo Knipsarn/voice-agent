@@ -138,6 +138,8 @@ node scripts/ops/tenant-meta.js     <tenantId>                    # _meta stamp 
 node scripts/ops/tenant-diff.js     <tenantId>                    # Local vs Firestore diff
 node scripts/ops/tenant-publish.js  <tenantId> [--dry-run]        # Publish to Firestore
 node scripts/ops/tenant-calls.js    <tenantId> [--limit=20] [--since=<ISO>]            # Recent call summaries (trace_id per call)
+node scripts/ops/tenant-replay.js   <tenantId> [--trace_id=<uuid>]                      # Readable dialogue transcript (latest call if no trace_id)
+node scripts/ops/tenant-stats.js    <tenantId> [--days=7] [--since=<ISO>]               # Aggregate stats: volume, duration, errors, fallbacks
 node scripts/ops/tenant-logs.js     <tenantId> [--limit=50] [--trace_id=<uuid>] [--since=<ISO>]  # Full logs, filterable by call
 node scripts/ops/tenant-errors.js   <tenantId> [--limit=50] [--trace_id=<uuid>] [--since=<ISO>]  # Errors/warnings only
 ```
