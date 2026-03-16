@@ -3,8 +3,6 @@
 // Existing env vars (set by Cloud Run) are never overwritten.
 require("dotenv").config({ path: require("path").join(__dirname, "../../config/.env") });
 
-const fs = require("fs");
-const path = require("path");
 const express = require("express");
 const http = require("http");
 const { WebSocketServer, WebSocket } = require("ws");
@@ -31,15 +29,6 @@ if (!DEFAULT_TENANT_ID) {
   console.warn("[startup] WARNING: DEFAULT_TENANT_ID not set — calls without ?tenant= will use hardcoded fallback.");
 }
 
-const tenantConfigDir =
-  process.env.TENANT_CONFIG_DIR || path.join(__dirname, "../../config/tenants");
-
-if (!fs.existsSync(tenantConfigDir)) {
-  console.warn(`[startup] WARNING: Tenant config directory not found: ${tenantConfigDir}`);
-} else {
-  console.log(`[startup] Tenant config dir OK: ${tenantConfigDir}`);
-}
-
 console.log(`[startup] Default model: ${DEFAULT_REALTIME_MODEL} | Default tenant: ${DEFAULT_TENANT_ID || "(none)"}`);
 
 // ─── HTTP + WebSocket server ──────────────────────────────────────────────────
@@ -55,12 +44,12 @@ const wss = new WebSocketServer({ server });
 
 // ─── Per-connection handler ───────────────────────────────────────────────────
 
-wss.on("connection", (telnyxWs, req) => {
+wss.on("connection", async (telnyxWs, req) => {
   // --- Tenant resolution ---
   const query = url.parse(req.url, true).query;
   const tenantId = query.tenant || DEFAULT_TENANT_ID;
 
-  const tenantConfig = tenantId ? loadTenant(tenantId) : null;
+  const tenantConfig = tenantId ? await loadTenant(tenantId) : null;
   const usingFallback = !tenantConfig;
 
   const instructions = usingFallback
@@ -75,6 +64,8 @@ wss.on("connection", (telnyxWs, req) => {
   const firstMessage = !usingFallback && tenantConfig.first_message_enabled
     ? (tenantConfig.first_message || null)
     : null;
+
+  const transcriptionLanguage = tenantConfig?.transcription_language || null;
 
   console.log(
     `[bridge] connection — tenant: ${tenantId || "(none)"} | model: ${realtimeModel} | voice: ${voice} | entry_mode: ${entryMode} | first_message: ${!!firstMessage} | fallback: ${usingFallback}`
@@ -98,15 +89,18 @@ wss.on("connection", (telnyxWs, req) => {
     openaiReady = true;
 
     // Audio codec path: g711_ulaw in and out — do not change
-    openaiWs.send(JSON.stringify({
-      type: "session.update",
-      session: {
-        instructions,
-        voice,
-        input_audio_format: "g711_ulaw",
-        output_audio_format: "g711_ulaw"
-      }
-    }));
+    const sessionPayload = {
+      instructions,
+      voice,
+      input_audio_format: "g711_ulaw",
+      output_audio_format: "g711_ulaw"
+    };
+
+    if (transcriptionLanguage) {
+      sessionPayload.input_audio_transcription = { model: "whisper-1", language: transcriptionLanguage };
+    }
+
+    openaiWs.send(JSON.stringify({ type: "session.update", session: sessionPayload }));
 
     // Trigger first_message using a per-response instruction override.
     // This is more reliable than embedding a cue in session instructions:

@@ -1,0 +1,26 @@
+FROM node:20-alpine
+
+# Mirror repo structure so all relative requires resolve correctly in the container:
+#   /app/apps/control-plane/../../voice-bridge/providers  ->  /app/apps/voice-bridge/providers
+#   /app/apps/control-plane/../../../scripts/lib           ->  /app/scripts/lib
+#   /app/apps/control-plane/../../../configs/tenants       ->  /app/configs/tenants
+WORKDIR /app/apps/control-plane
+
+# Install production dependencies
+COPY apps/control-plane/package*.json ./
+RUN npm install --omit=dev
+
+# Copy control-plane source
+COPY apps/control-plane/index.js ./
+COPY apps/control-plane/routes ./routes
+
+# Copy shared monorepo dependencies
+COPY apps/voice-bridge/providers /app/apps/voice-bridge/providers
+COPY scripts/lib /app/scripts/lib
+
+# Bake tenant configs for validate/diff endpoints (same pattern as voice-bridge)
+COPY configs/tenants /app/configs/tenants
+COPY configs/prompt-assets /app/configs/prompt-assets
+
+EXPOSE 8080
+CMD ["node", "index.js"]

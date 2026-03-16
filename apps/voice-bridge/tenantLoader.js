@@ -1,47 +1,45 @@
-const fs = require("fs");
-const path = require("path");
+const LocalFileTenantProvider = require("./providers/LocalFileTenantProvider");
+const FirestoreTenantProvider = require("./providers/FirestoreTenantProvider");
 
-// Default: two levels up from apps/voice-bridge/ -> repo root -> config/tenants/
-const TENANT_CONFIG_DIR =
-  process.env.TENANT_CONFIG_DIR ||
-  path.join(__dirname, "../../config/tenants");
+// ─── Provider selection ───────────────────────────────────────────────────────
 
-/**
- * Load tenant config from a local JSON file.
- *
- * @param {string} tenantId - The tenant identifier, e.g. "example-company"
- * @returns {object|null} Parsed tenant config, or null if not found or invalid
- */
-function loadTenant(tenantId) {
-  if (!tenantId) {
-    console.warn("[tenantLoader] loadTenant called without tenantId");
-    return null;
-  }
+const TENANT_PROVIDER = process.env.TENANT_PROVIDER || "local";
 
-  const filePath = path.join(TENANT_CONFIG_DIR, `${tenantId}.json`);
-
-  try {
-    const raw = fs.readFileSync(filePath, "utf8");
-    const config = JSON.parse(raw);
-    console.log(`[tenantLoader] Loaded config for tenant: ${tenantId}`);
-    return config;
-  } catch (err) {
-    if (err.code === "ENOENT") {
-      console.warn(`[tenantLoader] No config file found for tenant: ${tenantId} (path: ${filePath})`);
-    } else {
-      console.error(`[tenantLoader] Failed to load tenant ${tenantId}:`, err.message);
-    }
-    return null;
+function createProvider() {
+  switch (TENANT_PROVIDER) {
+    case "firestore":
+      console.log("[tenantLoader] Provider: firestore");
+      return new FirestoreTenantProvider();
+    case "local":
+    default:
+      console.log("[tenantLoader] Provider: local");
+      return new LocalFileTenantProvider();
   }
 }
 
+const provider = createProvider();
+
+// ─── Public API ───────────────────────────────────────────────────────────────
+
 /**
- * Build the GPT session instructions string from a tenant config.
- * Combines base instructions with the default mode's instructions and
- * any unlocked knowledge blocks.
+ * Load a tenant config by ID.
+ * Returns a fully resolved config object (all $file: refs expanded),
+ * or null if the tenant is not found.
  *
- * @param {object} tenantConfig - Loaded tenant config object
- * @returns {string} Combined instructions string for the GPT session
+ * @param {string} tenantId
+ * @returns {Promise<object|null>}
+ */
+async function loadTenant(tenantId) {
+  return provider.loadTenant(tenantId);
+}
+
+/**
+ * Build the GPT session instructions string from a resolved tenant config.
+ * Combines base + default mode instructions + unlocked knowledge blocks.
+ * Provider-agnostic: expects all values to already be inline strings.
+ *
+ * @param {object} tenantConfig
+ * @returns {string}
  */
 function buildInstructions(tenantConfig) {
   const parts = [];

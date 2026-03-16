@@ -1,0 +1,16 @@
+{
+  "name": "control-plane",
+  "version": "1.0.0",
+  "description": "Internal control-plane API for voice platform operations",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js",
+    "dev": "node --watch index.js"
+  },
+  "dependencies": {
+    "@google-cloud/firestore": "^7.0.0",
+    "dotenv": "^16.4.0",
+    "express": "^4.21.0",
+    "@google-cloud/logging": "^11.0.0"
+  }
+}

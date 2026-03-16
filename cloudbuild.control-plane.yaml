@@ -1,0 +1,12 @@
+steps:
+  - name: 'gcr.io/cloud-builders/docker'
+    args:
+      - build
+      - -f
+      - Dockerfile.control-plane
+      - -t
+      - gcr.io/ldk-clean/control-plane-service
+      - .
+
+images:
+  - gcr.io/ldk-clean/control-plane-service
