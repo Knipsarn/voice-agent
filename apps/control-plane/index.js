@@ -27,7 +27,7 @@ const app = express();
 app.use(express.json());
 
 // ── Auth middleware ──────────────────────────────────────────────────────────
-const API_KEY = process.env.CONTROL_PLANE_API_KEY;
+const API_KEY = process.env.CONTROL_PLANE_API_KEY?.trim();
 
 app.use((req, res, next) => {
   if (req.path === "/health") return next();
