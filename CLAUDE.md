@@ -131,6 +131,7 @@ Run from the repo root.
 ### Commands
 ```
 node scripts/ops/health.js                                        # Check control-plane is reachable
+node scripts/ops/tenant-create.js  <tenantId> --company="Name"  [--voice=marin] [--language=sv-SE] [--entry-mode=direct_to_gpt] [--phone=+46...]  # Scaffold new tenant + validate
 node scripts/ops/tenants-list.js                                  # List all tenants (summary)
 node scripts/ops/tenant-get.js      <tenantId>                    # Full Firestore document
 node scripts/ops/tenant-meta.js     <tenantId>                    # _meta stamp only
@@ -286,32 +287,36 @@ Requires `gcloud auth application-default login` for Firestore/Logging access.
 To add a new tenant:
 
 ```
-1. Create configs/tenants/<new-tenant-id>.json
-   - Copy from an existing tenant (e.g., example-company.json)
-   - Fill in: tenant_id, company_name, voice, entry_mode, instructions, modes, knowledge_blocks
-   - Set status: "draft"
+1. Scaffold:
+   node scripts/ops/tenant-create.js <id> --company="Name" [--voice=marin] [--language=sv-SE] [--entry-mode=direct_to_gpt] [--phone=+46...]
+   - Creates configs/tenants/<id>.json (status: draft)
+   - Creates configs/prompt-assets/<id>/ with main-prompt.md, intake-mode.md, guardrails.md
+   - Runs --dry-run validation automatically
 
-2. (Optional) Create configs/prompt-assets/<new-tenant-id>/
-   - Add modular prompt files (*.md)
-   - Reference them in the JSON config with $file: paths
+2. Edit prompt files — fill in [TODO] sections:
+   - configs/prompt-assets/<id>/main-prompt.md  — agent identity + role
+   - configs/prompt-assets/<id>/intake-mode.md  — intake flow
+   - configs/prompt-assets/<id>/guardrails.md   — brand guardrails
 
-3. Validate: node scripts/ops/tenant-publish.js <new-tenant-id> --dry-run
-   - Fix any validation errors
+3. Review config if needed:
+   - configs/tenants/<id>.json (voice, entry_mode, first_message, phone_numbers)
 
-4. Diff: node scripts/ops/tenant-diff.js <new-tenant-id>
+4. Validate: node scripts/ops/tenant-publish.js <id> --dry-run
+
+5. Diff: node scripts/ops/tenant-diff.js <id>
    - Will show "Firestore document not found" for a new tenant — that's expected
 
-5. Publish: node scripts/ops/tenant-publish.js <new-tenant-id>
+6. Publish: node scripts/ops/tenant-publish.js <id>
    - Creates the Firestore document with _meta
 
-6. Verify: node scripts/ops/tenant-meta.js <new-tenant-id>
+7. Verify: node scripts/ops/tenant-meta.js <id>
    - Confirm published_at and git_sha
 
-7. Test: configure n8n/Telnyx to route a test number to ?tenant=<new-tenant-id>
+8. Test: configure n8n/Telnyx to route a number to ?tenant=<id>
    - Make a test call
-   - Check logs: node scripts/ops/tenant-logs.js <new-tenant-id>
+   - Check logs: node scripts/ops/tenant-calls.js <id>
 
-8. When ready: set status to "active" in Git config, re-publish
+9. When ready: set status to "active" in Git config, re-publish
 ```
 
 ---
