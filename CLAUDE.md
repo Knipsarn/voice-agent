@@ -314,7 +314,7 @@ To add a new tenant:
 | Service | URL |
 |---------|-----|
 | voice-bridge-service | `https://voice-bridge-service-360579353014.europe-west1.run.app` |
-| control-plane-service | Run `gcloud run services describe control-plane-service --region=europe-west1 --project=ldk-clean --format="value(status.url)"` to get URL |
+| control-plane-service | `https://control-plane-service-360579353014.europe-west1.run.app` |
 
 To point `scripts/ops/` at the live control-plane instead of localhost, set in `config/.env`:
 ```
