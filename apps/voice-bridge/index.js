@@ -128,8 +128,10 @@ wss.on("connection", async (telnyxWs, req) => {
       output_audio_format: "g711_ulaw"
     };
 
+    // Always enable transcription so user speech is logged; language hint is optional.
+    sessionPayload.input_audio_transcription = { model: "whisper-1" };
     if (transcriptionLanguage) {
-      sessionPayload.input_audio_transcription = { model: "whisper-1", language: transcriptionLanguage };
+      sessionPayload.input_audio_transcription.language = transcriptionLanguage;
     }
 
     openaiWs.send(JSON.stringify({ type: "session.update", session: sessionPayload }));
@@ -190,6 +192,18 @@ wss.on("connection", async (telnyxWs, req) => {
           if (msg.item?.role === "user") {
             turnCountUser++;
             log("user_turn", { trace_id, tenant_id: tenantId || null, turn_user: turnCountUser });
+          }
+          break;
+
+        case "conversation.item.input_audio_transcription.completed":
+          if (msg.transcript) {
+            log("user_transcript", { trace_id, tenant_id: tenantId || null, turn_user: turnCountUser, text: msg.transcript });
+          }
+          break;
+
+        case "response.audio_transcript.done":
+          if (msg.transcript) {
+            log("assistant_transcript", { trace_id, tenant_id: tenantId || null, turn_assistant: turnCountAssistant + 1, text: msg.transcript });
           }
           break;
 

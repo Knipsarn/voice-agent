@@ -158,9 +158,11 @@ node scripts/ops/tenant-errors.js   <tenantId> [--limit=50] [--trace_id=<uuid>] 
 | `speech_stopped` | Caller stops speaking | `trace_id` |
 | `audio_committed` | Audio buffer committed | `trace_id` |
 | `user_turn` | User turn completed | `trace_id`, `turn_user` |
+| `user_transcript` | User speech transcribed | `trace_id`, `turn_user`, `text` |
 | `response_started` | AI starts responding | `trace_id`, `turn_assistant` |
 | `first_audio_token` | First AI audio out | `trace_id`, `latency_ms` |
 | `response_done` | AI response complete | `trace_id`, `turn_assistant` |
+| `assistant_transcript` | AI response transcribed | `trace_id`, `turn_assistant`, `text` |
 | `call_end` | Call disconnects | `trace_id`, `duration_ms`, `turn_count_user`, `turn_count_assistant` |
 | `openai_error` | OpenAI returned error | `trace_id`, `error` |
 | `telnyx_ws_error` | Telnyx WS error | `trace_id`, `error` |
