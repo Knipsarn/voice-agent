@@ -21,7 +21,11 @@ try {
   }
 } catch {}
 
-const BASE_URL = process.env.CONTROL_PLANE_BASE_URL || "http://localhost:4000";
+// --local flag overrides CONTROL_PLANE_BASE_URL for this invocation only.
+// Useful when publishing a new tenant (local control-plane reads new files from disk).
+const BASE_URL = process.argv.includes("--local")
+  ? "http://localhost:4000"
+  : (process.env.CONTROL_PLANE_BASE_URL || "http://localhost:4000");
 const API_KEY  = process.env.CONTROL_PLANE_API_KEY;
 
 async function request(method, path, body) {

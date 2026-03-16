@@ -173,12 +173,22 @@ Set in `config/.env`:
 - `CONTROL_PLANE_BASE_URL` — default `http://localhost:4000`. Set to Cloud Run URL for production access.
 - `CONTROL_PLANE_API_KEY` — required for all endpoints except /health
 
+### --local flag
+Any ops script accepts `--local` to route that single request to `http://localhost:4000`
+instead of the Cloud Run URL. Use this when publishing a new tenant whose config file
+doesn't exist yet in the deployed control-plane image.
+
+```
+node scripts/ops/tenant-publish.js <id> --dry-run --local
+node scripts/ops/tenant-publish.js <id> --local
+```
+
 ### Running control-plane locally
 ```bash
-cd <repo-root>
-GOOGLE_CLOUD_PROJECT=ldk-clean node apps/control-plane/index.js
+node apps/control-plane/index.js
 ```
 Requires `gcloud auth application-default login` for Firestore/Logging access.
+Reads configs from the local filesystem — needed for new tenant onboarding.
 
 ---
 

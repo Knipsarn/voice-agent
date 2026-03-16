@@ -220,13 +220,14 @@ console.log(`
   2. Review the config:
        configs/tenants/${tenantId}.json
 
-  3. Validate:
-       node scripts/ops/tenant-publish.js ${tenantId} --dry-run
+  3. Start control-plane locally (reads new files from disk):
+       node apps/control-plane/index.js
 
-  4. Publish when ready:
-       node scripts/ops/tenant-publish.js ${tenantId}
+  4. In another terminal — validate + publish:
+       node scripts/ops/tenant-publish.js ${tenantId} --dry-run --local
+       node scripts/ops/tenant-publish.js ${tenantId} --local
 
-  5. Verify:
+  5. Verify (uses live Cloud Run — no --local needed):
        node scripts/ops/tenant-meta.js ${tenantId}
 ────────────────────────────────────────────────────
 `);
