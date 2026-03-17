@@ -70,6 +70,7 @@ wss.on("connection", async (telnyxWs, req) => {
   const query = url.parse(req.url, true).query;
   const tenantId = query.tenant || DEFAULT_TENANT_ID;
   const callerNumber = query.caller || null;
+  const sessionId = query["session-id"] || null;
 
   const tenantConfig = tenantId ? await loadTenant(tenantId) : null;
   const fallback = !tenantConfig;
@@ -89,6 +90,8 @@ wss.on("connection", async (telnyxWs, req) => {
   log("call_start", {
     trace_id,
     tenant_id: tenantId || null,
+    session_id: sessionId,
+    caller_number: callerNumber,
     model: realtimeModel,
     voice,
     entry_mode: entryMode,
@@ -272,6 +275,7 @@ wss.on("connection", async (telnyxWs, req) => {
           tenant_id: tenantId,
           trace_id,
           caller_number: callerNumber,
+          session_id: sessionId,
           status: "done",
           metadata: {
             start_time_unix_secs: Math.floor(callStart / 1000),
