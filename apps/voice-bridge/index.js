@@ -264,8 +264,7 @@ wss.on("connection", async (telnyxWs, req) => {
                 output: JSON.stringify({ success: true })
               }
             }));
-            // Small delay so Telnyx plays any buffered farewell audio before we disconnect
-            setTimeout(fireHangup, 1500);
+            fireHangup();
           }
           break;
 
@@ -289,26 +288,30 @@ wss.on("connection", async (telnyxWs, req) => {
 
   // --- Telnyx hangup ---
   function fireHangup() {
+    log("hangup_attempt", { trace_id, tenant_id: tenantId || null, has_ccid: !!callControlId, has_key: !!TELNYX_API_KEY });
     if (!callControlId || !TELNYX_API_KEY) {
       logError("hangup_skipped", { trace_id, tenant_id: tenantId || null, reason: !callControlId ? "no call_control_id" : "no TELNYX_API_KEY" });
       return;
     }
+    // URL-encode the call_control_id — it may contain ":" which confuses URL parsers
+    const hangupUrl = new URL(`https://api.telnyx.com/v2/calls/${encodeURIComponent(callControlId)}/actions/hangup`);
     const reqData = JSON.stringify({});
-    const telnyxReq = require("https").request(
-      `https://api.telnyx.com/v2/calls/${callControlId}/actions/hangup`,
-      {
-        method: "POST",
-        headers: {
-          "Authorization": `Bearer ${TELNYX_API_KEY}`,
-          "Content-Type": "application/json",
-          "Content-Length": Buffer.byteLength(reqData)
-        }
+    const telnyxReq = require("https").request(hangupUrl, {
+      method: "POST",
+      headers: {
+        "Authorization": `Bearer ${TELNYX_API_KEY}`,
+        "Content-Type": "application/json",
+        "Content-Length": Buffer.byteLength(reqData)
       },
-      (res) => {
-        log("hangup_sent", { trace_id, tenant_id: tenantId || null, status: res.statusCode });
-        res.resume();
-      }
-    );
+      timeout: 8000
+    }, (res) => {
+      log("hangup_sent", { trace_id, tenant_id: tenantId || null, status: res.statusCode });
+      res.resume();
+    });
+    telnyxReq.on("timeout", () => {
+      logError("hangup_timeout", { trace_id, tenant_id: tenantId || null });
+      telnyxReq.destroy();
+    });
     telnyxReq.on("error", (err) => {
       logError("hangup_error", { trace_id, tenant_id: tenantId || null, error: err.message });
     });
