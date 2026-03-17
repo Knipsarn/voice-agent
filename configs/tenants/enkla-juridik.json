@@ -35,5 +35,9 @@
     "direct_to_gpt": true,
     "barge_in": true,
     "mode_switching": false
+  },
+  "webhook": {
+    "post_call_url": "https://n8n-08HY.sliplane.app/webhook/5c15e3ca-3e80-47e0-91bd-c494cfcf1bb6",
+    "enabled": true
   }
 }

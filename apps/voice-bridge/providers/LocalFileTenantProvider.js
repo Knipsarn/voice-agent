@@ -44,10 +44,13 @@ function resolveConfig(config) {
 
   if (resolved.modes) {
     resolved.modes = Object.fromEntries(
-      Object.entries(resolved.modes).map(([key, mode]) => [
-        key,
-        { ...mode, instructions: resolveValue(mode.instructions) }
-      ])
+      Object.entries(resolved.modes).map(([key, mode]) => {
+        const resolvedMode = { ...mode };
+        if (mode.instructions !== undefined) {
+          resolvedMode.instructions = resolveValue(mode.instructions);
+        }
+        return [key, resolvedMode];
+      })
     );
   }
 

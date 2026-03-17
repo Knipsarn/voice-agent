@@ -64,10 +64,12 @@ wss.on("connection", async (telnyxWs, req) => {
   let firstAudioSent = false;
   let turnCountUser = 0;
   let turnCountAssistant = 0;
+  const transcripts = [];
 
   // --- Tenant resolution ---
   const query = url.parse(req.url, true).query;
   const tenantId = query.tenant || DEFAULT_TENANT_ID;
+  const callerNumber = query.caller || null;
 
   const tenantConfig = tenantId ? await loadTenant(tenantId) : null;
   const fallback = !tenantConfig;
@@ -198,12 +200,14 @@ wss.on("connection", async (telnyxWs, req) => {
         case "conversation.item.input_audio_transcription.completed":
           if (msg.transcript) {
             log("user_transcript", { trace_id, tenant_id: tenantId || null, turn_user: turnCountUser, text: msg.transcript });
+            transcripts.push({ role: "user", message: msg.transcript, time_in_call_secs: Math.round((Date.now() - callStart) / 1000) });
           }
           break;
 
         case "response.audio_transcript.done":
           if (msg.transcript) {
             log("assistant_transcript", { trace_id, tenant_id: tenantId || null, turn_assistant: turnCountAssistant + 1, text: msg.transcript });
+            transcripts.push({ role: "agent", message: msg.transcript, time_in_call_secs: Math.round((Date.now() - callStart) / 1000) });
           }
           break;
 
@@ -248,14 +252,61 @@ wss.on("connection", async (telnyxWs, req) => {
 
   // --- Cleanup ---
   telnyxWs.on("close", () => {
+    const durationMs = Date.now() - callStart;
     log("call_end", {
       trace_id,
       tenant_id: tenantId || null,
-      duration_ms: Date.now() - callStart,
+      duration_ms: durationMs,
       turn_count_user: turnCountUser,
       turn_count_assistant: turnCountAssistant,
     });
     try { openaiWs.close(); } catch (_) {}
+
+    // --- Post-call webhook ---
+    const webhookUrl = tenantConfig?.webhook?.post_call_url;
+    if (webhookUrl && tenantConfig?.webhook?.enabled !== false) {
+      const payload = {
+        type: "post_call_transcription",
+        event_timestamp: Math.floor(Date.now() / 1000),
+        data: {
+          tenant_id: tenantId,
+          trace_id,
+          caller_number: callerNumber,
+          status: "done",
+          metadata: {
+            start_time_unix_secs: Math.floor(callStart / 1000),
+            call_duration_secs: Math.round(durationMs / 1000),
+            turn_count_user: turnCountUser,
+            turn_count_assistant: turnCountAssistant,
+            voice,
+            model: realtimeModel,
+            entry_mode: entryMode,
+            config_git_sha: tenantConfig?._meta?.git_sha || null,
+          },
+          transcript: transcripts,
+        },
+      };
+
+      try {
+        const webhookUrlObj = new URL(webhookUrl);
+        const lib = webhookUrlObj.protocol === "https:" ? require("https") : require("http");
+        const reqData = JSON.stringify(payload);
+        const webhookReq = lib.request(webhookUrlObj, {
+          method: "POST",
+          headers: { "Content-Type": "application/json", "Content-Length": Buffer.byteLength(reqData) },
+        }, (res) => {
+          log("webhook_sent", { trace_id, tenant_id: tenantId, status: res.statusCode });
+          res.resume(); // drain response
+        });
+        webhookReq.on("error", (err) => {
+          logError("webhook_error", { trace_id, tenant_id: tenantId, error: err.message });
+        });
+        webhookReq.write(reqData);
+        webhookReq.end();
+      } catch (err) {
+        logError("webhook_error", { trace_id, tenant_id: tenantId, error: err.message });
+      }
+    }
   });
 
   openaiWs.on("close", () => {

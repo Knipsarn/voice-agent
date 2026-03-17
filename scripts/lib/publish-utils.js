@@ -47,8 +47,8 @@ function validateConfig(config) {
       errors.push(`instructions.default_mode = "${defaultMode}" but modes.${defaultMode} does not exist`);
     } else {
       const mode = config.modes[defaultMode];
-      if (!mode.instructions || mode.instructions.trim().length === 0) {
-        errors.push(`modes.${defaultMode}.instructions is missing or empty`);
+      if (mode.instructions !== undefined && mode.instructions !== null && mode.instructions.trim().length === 0) {
+        warnings.push(`modes.${defaultMode}.instructions is present but empty`);
       }
       if (Array.isArray(mode.unlock_blocks)) {
         for (const block of mode.unlock_blocks) {
@@ -151,7 +151,8 @@ async function publishTenant(tenantId, { dryRun = false, provider, db } = {}) {
       );
       db = new Firestore();
     }
-    await db.collection("tenants").doc(tenantId).set(document);
+    const safeDoc = JSON.parse(JSON.stringify(document));
+    await db.collection("tenants").doc(tenantId).set(safeDoc);
   } catch (err) {
     return {
       success: false,
