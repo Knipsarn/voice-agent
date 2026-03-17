@@ -254,7 +254,12 @@ wss.on("connection", async (telnyxWs, req) => {
   });
 
   // --- Cleanup ---
-  telnyxWs.on("close", () => {
+  // endCall() is guarded against double-invocation — fires from whichever WS closes first.
+  let callEnded = false;
+  function endCall() {
+    if (callEnded) return;
+    callEnded = true;
+
     const durationMs = Date.now() - callStart;
     log("call_end", {
       trace_id,
@@ -263,7 +268,9 @@ wss.on("connection", async (telnyxWs, req) => {
       turn_count_user: turnCountUser,
       turn_count_assistant: turnCountAssistant,
     });
+
     try { openaiWs.close(); } catch (_) {}
+    try { telnyxWs.close(); } catch (_) {}
 
     // --- Post-call webhook ---
     const webhookUrl = tenantConfig?.webhook?.post_call_url;
@@ -300,7 +307,7 @@ wss.on("connection", async (telnyxWs, req) => {
           headers: { "Content-Type": "application/json", "Content-Length": Buffer.byteLength(reqData) },
         }, (res) => {
           log("webhook_sent", { trace_id, tenant_id: tenantId, status: res.statusCode });
-          res.resume(); // drain response
+          res.resume();
         });
         webhookReq.on("error", (err) => {
           logError("webhook_error", { trace_id, tenant_id: tenantId, error: err.message });
@@ -311,11 +318,10 @@ wss.on("connection", async (telnyxWs, req) => {
         logError("webhook_error", { trace_id, tenant_id: tenantId, error: err.message });
       }
     }
-  });
+  }
 
-  openaiWs.on("close", () => {
-    try { telnyxWs.close(); } catch (_) {}
-  });
+  telnyxWs.on("close", endCall);
+  openaiWs.on("close", endCall);
 
   telnyxWs.on("error", (err) =>
     logError("telnyx_ws_error", { trace_id, tenant_id: tenantId || null, error: err.message })
