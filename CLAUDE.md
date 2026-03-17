@@ -53,13 +53,14 @@ Operator (you) -> scripts/ops/* -> control-plane-service (Cloud Run)
 | Git `configs/tenants/*.json` | Authoring source-of-truth |
 | Git `configs/prompt-assets/<id>/*.md` | Modular prompt files, referenced via `$file:` |
 | Cloud Logging | Call logs, errors, bridge lifecycle events |
-| Secret Manager | `OPENAI_API_KEY`, `CONTROL_PLANE_API_KEY` |
+| Secret Manager | `OPENAI_API_KEY`, `CONTROL_PLANE_API_KEY`, `TELNYX_API_KEY` |
 
 ### Key constraints
 - Audio codec: **G.711 ulaw** — never change
 - Model: **gpt-realtime-1.5** — do not switch unless explicitly instructed
 - n8n handles Telnyx webhooks — do NOT change
 - Tenant identity: `?tenant=<tenantId>` query param on the WebSocket URL
+- Full n8n WSS URL format: `wss://voice-bridge-service-...?tenant=<id>&caller=<e164>&session-id=<uuid>&control-id=<call_control_id>`
 - `containerConcurrency: 1` — one call per instance, cold start on parallel calls
 - `min instances: 1` — always one warm instance
 
@@ -167,6 +168,12 @@ node scripts/ops/tenant-errors.js   <tenantId> [--limit=50] [--trace_id=<uuid>] 
 | `response_done` | AI response complete | `trace_id`, `turn_assistant` |
 | `assistant_transcript` | AI response transcribed | `trace_id`, `turn_assistant`, `text` |
 | `call_end` | Call disconnects | `trace_id`, `duration_ms`, `turn_count_user`, `turn_count_assistant` |
+| `webhook_sent` | Post-call webhook delivered | `trace_id`, `status` (HTTP status code) |
+| `end_call_tool` | Agent invoked end_call function | `trace_id`, `call_id` |
+| `hangup_attempt` | fireHangup() entered | `trace_id`, `has_ccid`, `has_key` |
+| `hangup_sent` | Telnyx hangup API responded | `trace_id`, `status` |
+| `hangup_timeout` | Telnyx API did not respond in 8s | `trace_id` |
+| `hangup_skipped` | Missing call_control_id or TELNYX_API_KEY | `trace_id`, `reason` |
 | `openai_error` | OpenAI returned error | `trace_id`, `error` |
 | `telnyx_ws_error` | Telnyx WS error | `trace_id`, `error` |
 
@@ -292,6 +299,15 @@ Reads configs from the local filesystem — needed for new tenant onboarding.
 - **Cause:** `curl` is alias for `Invoke-WebRequest` in PowerShell
 - **Fix:** Use `curl.exe` explicitly
 
+### `Invalid character in header content ["Authorization"]` (openai_parse_error)
+- **Cause:** `TELNYX_API_KEY` in Secret Manager was created with `echo ... | gcloud` — Windows `echo` appends `\r\n`, stored newline is invalid in an HTTP header
+- **Fix:** Re-create secret version with Node: `node -e "require('fs').writeFileSync('k.tmp','<key>')" && gcloud secrets versions add TELNYX_API_KEY --data-file=k.tmp && del k.tmp`
+- **Code guard:** `TELNYX_API_KEY` is `.trim()`-ed at startup in `index.js`
+
+### Agent calls `end_call` but call stays open / silent
+- **Cause:** `hangup_attempt` fires but `hangup_sent` does not → check `openai_parse_error` for header issues, or `hangup_timeout` for Telnyx API slowness
+- **Fix:** Check `has_ccid` and `has_key` in `hangup_attempt` log. If both true but no `hangup_sent`, look for `openai_parse_error` at the same timestamp.
+
 ---
 
 ## 11. Tenant onboarding checklist
@@ -345,14 +361,14 @@ To add a new tenant:
 | GitHub | `https://github.com/Knipsarn/voice-agent` (branch: `main`) |
 | Service account | `360579353014-compute@developer.gserviceaccount.com` |
 | IAM roles | `datastore.user`, `logging.viewer`, `secretmanager.secretAccessor` |
-| Secrets | `OPENAI_API_KEY`, `CONTROL_PLANE_API_KEY` (Secret Manager) |
-| Live revision | `voice-bridge-service-00008-rep` (100% traffic, `TENANT_PROVIDER=firestore`) |
+| Secrets | `OPENAI_API_KEY`, `CONTROL_PLANE_API_KEY`, `TELNYX_API_KEY` (Secret Manager) |
+| Live revision | `voice-bridge-service-00018` (latest, end_call tool + hangup API) |
 
 ### Current tenants
 | Tenant | Status | Voice | Entry mode | Language |
 |--------|--------|-------|------------|----------|
 | `example-company` | active | alloy | pbx_first | sv-SE |
-| `enklare-juridik` | draft | marin | direct_to_gpt | sv-SE |
+| `enkla-juridik` | draft | marin | direct_to_gpt | sv-SE | Aila, webhook enabled |
 
 ### Production URLs
 | Service | URL |
@@ -369,25 +385,24 @@ CONTROL_PLANE_BASE_URL=https://<control-plane-url>
 
 ## 13. Upcoming roadmap
 
+### Completed this sprint
+- ✅ Structured tracing (trace_id, jsonPayload, all call lifecycle events)
+- ✅ CI/CD Cloud Build triggers (push to main → auto-deploy both services)
+- ✅ enkla-juridik onboarded (Aila, voice marin, sv-SE, direct_to_gpt, post-call webhook)
+- ✅ Post-call webhook (transcript + metadata → n8n after call ends)
+- ✅ Agent end_call tool (AI can hang up via Telnyx Call Control API)
+- ✅ caller_number + session_id + call_control_id in WSS URL and logs
+- ✅ TELNYX_API_KEY in Secret Manager
+
 ### Immediate (next sessions)
-1. **Structured tracing in voice-bridge** — Log per-call fields so I can debug calls autonomously:
-   - `trace_id` (UUID or Telnyx `call_control_id`)
-   - `tenant_id`, `config_git_sha`, `config_published_at`
-   - `fallback_used` (Firestore miss → local → generic)
-   - `instructions_length`, `prompt_sources` (which prompt files loaded)
-   - Speech events: `speech_started`, `speech_stopped`, `committed`
-   - `turn_count_user`, `turn_count_assistant`
-   - `latency_ms_first_token`, `latency_ms_response_done`
-   - Errors: OpenAI WS errors, tenant not found, secret missing
-
-2. **Point ops scripts at live control-plane** — Set `CONTROL_PLANE_BASE_URL` in `config/.env` so no local server is needed for operator tasks.
-
-3. **Control-plane ingress hardening** — Currently `allow-unauthenticated`. Consider restricting to internal or requiring Cloud IAP.
+1. **enkla-juridik status → active** — Set status to "active" in Git, re-publish when ready for production
+2. **Aggregate stats** — `tenant-stats.js` for call volume, avg duration, error rate per tenant
+3. **Control-plane ingress hardening** — Currently `allow-unauthenticated`. Restrict to Cloud IAP or IP allowlist.
+4. **API key rotation** — Rotate `CONTROL_PLANE_API_KEY` (was exposed in chat history). `node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"`
 
 ### Medium term
-- **Log query by time window and call-id** — Control-plane `/logs` endpoint should support `?since=` and `?trace_id=` filters.
-- **Tenant onboarding automation** — Single command to scaffold a new tenant: create JSON + prompt assets, validate, publish, verify.
-- **API key rotation** — Rotate `CONTROL_PLANE_API_KEY` (was exposed in chat history). Generate: `node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"`.
+- **Call replay** — `tenant-replay.js` produces a readable dialogue transcript per trace_id
+- **Multi-tenant onboarding** — Second real customer using existing scaffold workflow
 
 ### Long term vision
 The goal is a full **AI-ops loop**:
