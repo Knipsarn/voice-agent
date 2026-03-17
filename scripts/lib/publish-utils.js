@@ -13,7 +13,7 @@ const { execSync } = require("child_process");
 
 const REPO_ROOT = path.join(__dirname, "../..");
 const REQUIRED_FIELDS = ["tenant_id", "status", "voice", "entry_mode", "instructions"];
-const REQUIRED_INSTRUCTIONS = ["base", "default_mode"];
+const REQUIRED_INSTRUCTIONS = ["base"];
 const SCHEMA_VERSION = 1;
 
 function getGitSha() {
@@ -39,6 +39,12 @@ function validateConfig(config) {
     if (typeof config.instructions.base === "string" && config.instructions.base.trim().length < 50) {
       warnings.push(`instructions.base is very short — was $file: ref resolved?`);
     }
+  }
+
+  // Workflow tenants use workflow.initial_mode instead of instructions.default_mode
+  const workflowEnabled = !!config.workflow?.enabled;
+  if (!workflowEnabled && !config.instructions?.default_mode) {
+    errors.push(`Missing instructions.default_mode (required for non-workflow tenants)`);
   }
 
   const defaultMode = config.instructions?.default_mode;
