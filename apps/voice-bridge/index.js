@@ -9,7 +9,7 @@ const { WebSocketServer, WebSocket } = require("ws");
 const url = require("url");
 const crypto = require("crypto");
 
-const { loadTenant, buildInstructions } = require("./tenantLoader");
+const { loadTenant, buildInstructions, buildWorkflowInstructions, generateWorkflowTools, isWorkflowEnabled } = require("./tenantLoader");
 
 // ─── Structured logging ───────────────────────────────────────────────────────
 // Output JSON so Cloud Logging ingests as jsonPayload (queryable by field).
@@ -78,10 +78,22 @@ wss.on("connection", async (telnyxWs, req) => {
 
   const tenantConfig = tenantId ? await loadTenant(tenantId) : null;
   const fallback = !tenantConfig;
+  const workflowEnabled = !fallback && isWorkflowEnabled(tenantConfig);
 
-  const instructions = (fallback
-    ? FALLBACK_INSTRUCTIONS
-    : buildInstructions(tenantConfig)) + END_CALL_ADDENDUM;
+  // --- Workflow state (per-connection) ---
+  let currentMode = workflowEnabled ? tenantConfig.workflow.initial_mode : null;
+  const visitedModes = workflowEnabled ? new Set([currentMode]) : null;
+
+  // Build initial instructions
+  let instructions;
+  if (fallback) {
+    instructions = FALLBACK_INSTRUCTIONS;
+  } else if (workflowEnabled) {
+    instructions = buildWorkflowInstructions(tenantConfig, currentMode);
+  } else {
+    instructions = buildInstructions(tenantConfig);
+  }
+  instructions += END_CALL_ADDENDUM;
 
   const voice = tenantConfig?.voice || DEFAULT_VOICE;
   const realtimeModel = tenantConfig?.realtime_model || DEFAULT_REALTIME_MODEL;
@@ -144,15 +156,20 @@ wss.on("connection", async (telnyxWs, req) => {
       sessionPayload.input_audio_transcription.language = transcriptionLanguage;
     }
 
-    // Register end_call tool so the agent can hang up when appropriate.
-    sessionPayload.tools = [
-      {
-        type: "function",
-        name: "end_call",
-        description: "Physically disconnects the phone call. You MUST call this tool when: (1) the caller says goodbye or asks to hang up, (2) the intake is complete and confirmed, (3) the caller has no further questions. Always say a farewell phrase to the caller BEFORE invoking this tool. Never just say goodbye verbally — you MUST call end_call to actually hang up.",
-        parameters: { type: "object", properties: {}, required: [] }
-      }
-    ];
+    // Build tool set: end_call always present + workflow transfer tools if applicable.
+    const END_CALL_TOOL = {
+      type: "function",
+      name: "end_call",
+      description: "Physically disconnects the phone call. You MUST call this tool when: (1) the caller says goodbye or asks to hang up, (2) the intake is complete and confirmed, (3) the caller has no further questions. Always say a farewell phrase to the caller BEFORE invoking this tool. Never just say goodbye verbally — you MUST call end_call to actually hang up.",
+      parameters: { type: "object", properties: {}, required: [] }
+    };
+
+    if (workflowEnabled) {
+      const transferTools = generateWorkflowTools(tenantConfig, currentMode);
+      sessionPayload.tools = [END_CALL_TOOL, ...transferTools];
+    } else {
+      sessionPayload.tools = [END_CALL_TOOL];
+    }
     sessionPayload.tool_choice = "auto";
 
     openaiWs.send(JSON.stringify({ type: "session.update", session: sessionPayload }));
@@ -253,18 +270,84 @@ wss.on("connection", async (telnyxWs, req) => {
 
         case "response.output_item.done":
           // Handle function tool calls at the canonical event (fires before response.done)
-          if (msg.item?.type === "function_call" && msg.item?.name === "end_call" && msg.item?.status === "completed") {
-            log("end_call_tool", { trace_id, tenant_id: tenantId || null, call_id: msg.item.call_id });
-            // Acknowledge the tool call so the protocol is complete, then hang up without response.create
-            openaiWs.send(JSON.stringify({
-              type: "conversation.item.create",
-              item: {
-                type: "function_call_output",
-                call_id: msg.item.call_id,
-                output: JSON.stringify({ success: true })
+          if (msg.item?.type === "function_call" && msg.item?.status === "completed") {
+            const fnName = msg.item.name;
+
+            if (fnName === "end_call") {
+              log("end_call_tool", { trace_id, tenant_id: tenantId || null, call_id: msg.item.call_id });
+              openaiWs.send(JSON.stringify({
+                type: "conversation.item.create",
+                item: {
+                  type: "function_call_output",
+                  call_id: msg.item.call_id,
+                  output: JSON.stringify({ success: true })
+                }
+              }));
+              fireHangup();
+
+            } else if (workflowEnabled && fnName.startsWith("transfer_to_")) {
+              const targetMode = fnName.replace("transfer_to_", "");
+              const modeExists = !!tenantConfig.workflow.modes?.[targetMode];
+
+              if (!modeExists) {
+                logError("mode_switch_invalid", { trace_id, tenant_id: tenantId || null, from: currentMode, to: targetMode });
+                openaiWs.send(JSON.stringify({
+                  type: "conversation.item.create",
+                  item: { type: "function_call_output", call_id: msg.item.call_id, output: JSON.stringify({ error: "unknown mode" }) }
+                }));
+                openaiWs.send(JSON.stringify({ type: "response.create" }));
+                break;
               }
-            }));
-            fireHangup();
+
+              // Loop prevention: allow revisiting modes but log a warning
+              if (visitedModes.has(targetMode)) {
+                log("mode_switch_revisit", { trace_id, tenant_id: tenantId || null, from: currentMode, to: targetMode });
+              }
+
+              const previousMode = currentMode;
+              currentMode = targetMode;
+              visitedModes.add(targetMode);
+
+              // 1. session.update FIRST — new instructions + tools take effect before the response
+              const newInstructions = buildWorkflowInstructions(tenantConfig, targetMode) + END_CALL_ADDENDUM;
+              const newTools = generateWorkflowTools(tenantConfig, targetMode);
+              const END_CALL_TOOL = {
+                type: "function",
+                name: "end_call",
+                description: "Physically disconnects the phone call. You MUST call this tool when: (1) the caller says goodbye or asks to hang up, (2) the intake is complete and confirmed, (3) the caller has no further questions. Always say a farewell phrase to the caller BEFORE invoking this tool. Never just say goodbye verbally — you MUST call end_call to actually hang up.",
+                parameters: { type: "object", properties: {}, required: [] }
+              };
+              openaiWs.send(JSON.stringify({
+                type: "session.update",
+                session: {
+                  instructions: newInstructions,
+                  tools: [END_CALL_TOOL, ...newTools],
+                  tool_choice: "auto"
+                }
+              }));
+
+              // 2. ACK the function call
+              openaiWs.send(JSON.stringify({
+                type: "conversation.item.create",
+                item: {
+                  type: "function_call_output",
+                  call_id: msg.item.call_id,
+                  output: JSON.stringify({ transferred: true, new_mode: targetMode })
+                }
+              }));
+
+              // 3. Trigger the model to respond in the new mode
+              openaiWs.send(JSON.stringify({ type: "response.create" }));
+
+              log("mode_switch", {
+                trace_id,
+                tenant_id: tenantId || null,
+                from: previousMode,
+                to: targetMode,
+                instructions_length: newInstructions.length,
+                tools_count: newTools.length + 1,
+              });
+            }
           }
           break;
 

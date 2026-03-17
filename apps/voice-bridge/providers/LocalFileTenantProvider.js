@@ -63,6 +63,22 @@ function resolveConfig(config) {
     );
   }
 
+  // Resolve $file: refs in workflow mode instructions
+  if (resolved.workflow?.modes) {
+    resolved.workflow = {
+      ...resolved.workflow,
+      modes: Object.fromEntries(
+        Object.entries(resolved.workflow.modes).map(([key, mode]) => {
+          const resolvedMode = { ...mode };
+          if (mode.instructions !== undefined) {
+            resolvedMode.instructions = resolveValue(mode.instructions);
+          }
+          return [key, resolvedMode];
+        })
+      )
+    };
+  }
+
   return resolved;
 }
 

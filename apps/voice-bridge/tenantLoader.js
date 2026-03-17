@@ -63,4 +63,71 @@ function buildInstructions(tenantConfig) {
   return parts.join("\n\n") || "You are a helpful phone assistant.";
 }
 
-module.exports = { loadTenant, buildInstructions };
+/**
+ * Build instructions for a specific workflow mode.
+ * Returns: base system prompt + mode-specific instructions.
+ *
+ * @param {object} tenantConfig
+ * @param {string} modeName
+ * @returns {string}
+ */
+function buildWorkflowInstructions(tenantConfig, modeName) {
+  const parts = [];
+
+  const base = tenantConfig?.instructions?.base;
+  if (base) parts.push(base);
+
+  const modeConfig = tenantConfig?.workflow?.modes?.[modeName];
+  if (modeConfig?.instructions) parts.push(modeConfig.instructions);
+
+  return parts.join("\n\n") || "You are a helpful phone assistant.";
+}
+
+/**
+ * Generate OpenAI function tool definitions for a workflow mode.
+ * Automatically creates transfer_to_X tools from the mode's transfers map.
+ *
+ * @param {object} tenantConfig
+ * @param {string} modeName
+ * @returns {Array} Array of OpenAI tool definitions
+ */
+function generateWorkflowTools(tenantConfig, modeName) {
+  const tools = [];
+  const modeConfig = tenantConfig?.workflow?.modes?.[modeName];
+
+  // Auto-generate transfer tools from the mode's transfers map
+  if (modeConfig?.transfers) {
+    for (const [fnName, condition] of Object.entries(modeConfig.transfers)) {
+      tools.push({
+        type: "function",
+        name: fnName,
+        description: `Anropa denna funktion för att gå vidare. Villkor: ${condition}`,
+        parameters: { type: "object", properties: {}, required: [] }
+      });
+    }
+  }
+
+  // backward_to: allows routing back to a parent mode
+  if (modeConfig?.backward_to) {
+    const parentMode = modeConfig.backward_to;
+    tools.push({
+      type: "function",
+      name: `transfer_to_${parentMode}`,
+      description: `Gå tillbaka till ${parentMode} om ärendet var felkategoriserat.`,
+      parameters: { type: "object", properties: {}, required: [] }
+    });
+  }
+
+  return tools;
+}
+
+/**
+ * Check if a tenant config uses the workflow system.
+ * @param {object} tenantConfig
+ * @returns {boolean}
+ */
+function isWorkflowEnabled(tenantConfig) {
+  return !!tenantConfig?.workflow?.enabled;
+}
+
+module.exports = { loadTenant, buildInstructions, buildWorkflowInstructions, generateWorkflowTools, isWorkflowEnabled };
