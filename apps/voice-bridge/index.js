@@ -31,6 +31,7 @@ const DEFAULT_TENANT_ID = process.env.DEFAULT_TENANT_ID || null;
 const DEFAULT_REALTIME_MODEL = process.env.DEFAULT_REALTIME_MODEL || "gpt-realtime-1.5";
 const DEFAULT_VOICE = "alloy";
 const FALLBACK_INSTRUCTIONS = "You are a helpful phone assistant.";
+const END_CALL_ADDENDUM = "\n\n# Samtalsavslut\nDu har tillgång till funktionen `end_call` som lägger på luren. Du MÅSTE anropa end_call när: samtalet är klart, uppringaren säger hejdå eller ber dig lägga på, eller ärendet är avslutat och bekräftat. Säg alltid ett kort avsked INNAN du anropar end_call. Säg aldrig hejdå utan att faktiskt anropa end_call — annars hänger samtalet kvar.";
 
 // ─── Startup validation ───────────────────────────────────────────────────────
 
@@ -78,9 +79,9 @@ wss.on("connection", async (telnyxWs, req) => {
   const tenantConfig = tenantId ? await loadTenant(tenantId) : null;
   const fallback = !tenantConfig;
 
-  const instructions = fallback
+  const instructions = (fallback
     ? FALLBACK_INSTRUCTIONS
-    : buildInstructions(tenantConfig);
+    : buildInstructions(tenantConfig)) + END_CALL_ADDENDUM;
 
   const voice = tenantConfig?.voice || DEFAULT_VOICE;
   const realtimeModel = tenantConfig?.realtime_model || DEFAULT_REALTIME_MODEL;
@@ -148,7 +149,7 @@ wss.on("connection", async (telnyxWs, req) => {
       {
         type: "function",
         name: "end_call",
-        description: "End the phone call. Call this when the conversation is complete and the caller has confirmed their matter is handled, or when the caller asks to end the call.",
+        description: "Physically disconnects the phone call. You MUST call this tool when: (1) the caller says goodbye or asks to hang up, (2) the intake is complete and confirmed, (3) the caller has no further questions. Always say a farewell phrase to the caller BEFORE invoking this tool. Never just say goodbye verbally — you MUST call end_call to actually hang up.",
         parameters: { type: "object", properties: {}, required: [] }
       }
     ];
@@ -250,18 +251,27 @@ wss.on("connection", async (telnyxWs, req) => {
           }
           break;
 
+        case "response.output_item.done":
+          // Handle function tool calls at the canonical event (fires before response.done)
+          if (msg.item?.type === "function_call" && msg.item?.name === "end_call" && msg.item?.status === "completed") {
+            log("end_call_tool", { trace_id, tenant_id: tenantId || null, call_id: msg.item.call_id });
+            // Acknowledge the tool call so the protocol is complete, then hang up without response.create
+            openaiWs.send(JSON.stringify({
+              type: "conversation.item.create",
+              item: {
+                type: "function_call_output",
+                call_id: msg.item.call_id,
+                output: JSON.stringify({ success: true })
+              }
+            }));
+            // Small delay so Telnyx plays any buffered farewell audio before we disconnect
+            setTimeout(fireHangup, 1500);
+          }
+          break;
+
         case "response.done":
           turnCountAssistant++;
           log("response_done", { trace_id, tenant_id: tenantId || null, turn_assistant: turnCountAssistant });
-          // Check if AI called end_call tool
-          if (msg.response?.output) {
-            for (const item of msg.response.output) {
-              if (item.type === "function_call" && item.name === "end_call") {
-                log("end_call_tool", { trace_id, tenant_id: tenantId || null });
-                fireHangup();
-              }
-            }
-          }
           break;
 
         case "error":
