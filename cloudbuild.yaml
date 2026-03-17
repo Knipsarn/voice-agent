@@ -22,6 +22,7 @@ steps:
       - --image=gcr.io/ldk-clean/voice-bridge-service:latest
       - --region=europe-west1
       - --project=ldk-clean
+      - --update-secrets=TELNYX_API_KEY=TELNYX_API_KEY:latest
       - --quiet
 
   - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'

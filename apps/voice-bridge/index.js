@@ -26,6 +26,7 @@ function logError(event, fields = {}) {
 // ─── Startup constants ────────────────────────────────────────────────────────
 
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
+const TELNYX_API_KEY = process.env.TELNYX_API_KEY;
 const DEFAULT_TENANT_ID = process.env.DEFAULT_TENANT_ID || null;
 const DEFAULT_REALTIME_MODEL = process.env.DEFAULT_REALTIME_MODEL || "gpt-realtime-1.5";
 const DEFAULT_VOICE = "alloy";
@@ -69,8 +70,10 @@ wss.on("connection", async (telnyxWs, req) => {
   // --- Tenant resolution ---
   const query = url.parse(req.url, true).query;
   const tenantId = query.tenant || DEFAULT_TENANT_ID;
-  const callerNumber = query.caller || null;
+  // URL query parsing decodes "+" as space — restore leading "+" for E.164 numbers
+  const callerNumber = query.caller ? query.caller.trim().replace(/^(\d)/, "+$1") : null;
   const sessionId = query["session-id"] || null;
+  const callControlId = query["call_control_id"] || query["control-id"] || null;
 
   const tenantConfig = tenantId ? await loadTenant(tenantId) : null;
   const fallback = !tenantConfig;
@@ -92,6 +95,7 @@ wss.on("connection", async (telnyxWs, req) => {
     tenant_id: tenantId || null,
     session_id: sessionId,
     caller_number: callerNumber,
+    call_control_id: callControlId,
     model: realtimeModel,
     voice,
     entry_mode: entryMode,
@@ -138,6 +142,17 @@ wss.on("connection", async (telnyxWs, req) => {
     if (transcriptionLanguage) {
       sessionPayload.input_audio_transcription.language = transcriptionLanguage;
     }
+
+    // Register end_call tool so the agent can hang up when appropriate.
+    sessionPayload.tools = [
+      {
+        type: "function",
+        name: "end_call",
+        description: "End the phone call. Call this when the conversation is complete and the caller has confirmed their matter is handled, or when the caller asks to end the call.",
+        parameters: { type: "object", properties: {}, required: [] }
+      }
+    ];
+    sessionPayload.tool_choice = "auto";
 
     openaiWs.send(JSON.stringify({ type: "session.update", session: sessionPayload }));
 
@@ -238,6 +253,15 @@ wss.on("connection", async (telnyxWs, req) => {
         case "response.done":
           turnCountAssistant++;
           log("response_done", { trace_id, tenant_id: tenantId || null, turn_assistant: turnCountAssistant });
+          // Check if AI called end_call tool
+          if (msg.response?.output) {
+            for (const item of msg.response.output) {
+              if (item.type === "function_call" && item.name === "end_call") {
+                log("end_call_tool", { trace_id, tenant_id: tenantId || null });
+                fireHangup();
+              }
+            }
+          }
           break;
 
         case "error":
@@ -252,6 +276,35 @@ wss.on("connection", async (telnyxWs, req) => {
       logError("openai_parse_error", { trace_id, tenant_id: tenantId || null, error: err.message });
     }
   });
+
+  // --- Telnyx hangup ---
+  function fireHangup() {
+    if (!callControlId || !TELNYX_API_KEY) {
+      logError("hangup_skipped", { trace_id, tenant_id: tenantId || null, reason: !callControlId ? "no call_control_id" : "no TELNYX_API_KEY" });
+      return;
+    }
+    const reqData = JSON.stringify({});
+    const telnyxReq = require("https").request(
+      `https://api.telnyx.com/v2/calls/${callControlId}/actions/hangup`,
+      {
+        method: "POST",
+        headers: {
+          "Authorization": `Bearer ${TELNYX_API_KEY}`,
+          "Content-Type": "application/json",
+          "Content-Length": Buffer.byteLength(reqData)
+        }
+      },
+      (res) => {
+        log("hangup_sent", { trace_id, tenant_id: tenantId || null, status: res.statusCode });
+        res.resume();
+      }
+    );
+    telnyxReq.on("error", (err) => {
+      logError("hangup_error", { trace_id, tenant_id: tenantId || null, error: err.message });
+    });
+    telnyxReq.write(reqData);
+    telnyxReq.end();
+  }
 
   // --- Cleanup ---
   // endCall() is guarded against double-invocation — fires from whichever WS closes first.
