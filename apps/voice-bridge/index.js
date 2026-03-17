@@ -26,7 +26,7 @@ function logError(event, fields = {}) {
 // ─── Startup constants ────────────────────────────────────────────────────────
 
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
-const TELNYX_API_KEY = process.env.TELNYX_API_KEY;
+const TELNYX_API_KEY = process.env.TELNYX_API_KEY?.trim() || null;
 const DEFAULT_TENANT_ID = process.env.DEFAULT_TENANT_ID || null;
 const DEFAULT_REALTIME_MODEL = process.env.DEFAULT_REALTIME_MODEL || "gpt-realtime-1.5";
 const DEFAULT_VOICE = "alloy";
