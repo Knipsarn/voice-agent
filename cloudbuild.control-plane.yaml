@@ -22,8 +22,18 @@ steps:
       - --image=gcr.io/ldk-clean/control-plane-service:latest
       - --region=europe-west1
       - --project=ldk-clean
-      - --traffic=LATEST
       - --quiet
+
+  - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
+    entrypoint: gcloud
+    args:
+      - run
+      - services
+      - update-traffic
+      - control-plane-service
+      - --to-latest
+      - --region=europe-west1
+      - --project=ldk-clean
 
 images:
   - gcr.io/ldk-clean/control-plane-service
