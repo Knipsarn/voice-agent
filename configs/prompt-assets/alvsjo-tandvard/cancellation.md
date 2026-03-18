@@ -17,4 +17,7 @@ STOPP. Vänta på ja eller nej. Om nej, fråga vilket nummer som är rätt.
 
 Steg 3 — Avslut
 Säg: "Tack [namn]. Jag skickar ärendet till mina kollegor direkt, så återkommer de."
-Anropa end_call direkt efter denna mening.
+STOPP. Vänta på att uppringaren svarar.
+
+Steg 4 — Hej då
+Säg hej då på ett vänligt sätt. Anropa sedan end_call.

@@ -98,8 +98,10 @@ wss.on("connection", async (telnyxWs, req) => {
   // --- Workflow state (per-connection) ---
   let currentMode = workflowEnabled ? tenantConfig.workflow.initial_mode : null;
   const visitedModes = workflowEnabled ? new Set([currentMode]) : null;
-  let pendingPhoneTransfer = null; // set when mode has phone_transfer; fires after response.done
+  let pendingPhoneTransfer = null; // set when mode has phone_transfer; fires after new mode's response.done
   let pendingHangup = false;       // set when end_call tool fires; executes after response.done + delay
+  let awaitingTransferResponse = false; // true = next response.done is the OLD mode's; skip it
+  let transferFired = false;       // true = phone transfer initiated; stop all audio forwarding
 
   // Determine initial mode type for conditional tool/instruction setup
   const initialModeType = workflowEnabled
@@ -211,7 +213,7 @@ wss.on("connection", async (telnyxWs, req) => {
     try {
       const msg = JSON.parse(raw.toString());
 
-      if (!openaiReady) return;
+      if (!openaiReady || transferFired) return;
 
       if (msg.event === "media" && msg.media?.payload) {
         openaiWs.send(JSON.stringify({
@@ -272,7 +274,7 @@ wss.on("connection", async (telnyxWs, req) => {
           break;
 
         case "response.audio.delta":
-          if (msg.delta) {
+          if (msg.delta && !transferFired) {
             if (!firstAudioSent) {
               firstAudioSent = true;
               log("first_audio_token", {
@@ -371,6 +373,7 @@ wss.on("connection", async (telnyxWs, req) => {
 
               if (targetModeConfig?.phone_transfer) {
                 pendingPhoneTransfer = targetModeConfig.phone_transfer;
+                awaitingTransferResponse = true; // skip the next response.done (old mode's)
               }
 
               log("mode_switch", {
@@ -390,16 +393,25 @@ wss.on("connection", async (telnyxWs, req) => {
         case "response.done":
           turnCountAssistant++;
           log("response_done", { trace_id, tenant_id: tenantId || null, turn_assistant: turnCountAssistant });
-          // Fire phone transfer after agent finishes speaking in a transfer mode
+          // Fire phone transfer after agent finishes speaking in the NEW mode.
+          // awaitingTransferResponse = true means this response.done is for the OLD mode — skip.
           if (pendingPhoneTransfer) {
-            const transferTo = pendingPhoneTransfer;
-            pendingPhoneTransfer = null;
-            fireTransfer(transferTo);
+            if (awaitingTransferResponse) {
+              awaitingTransferResponse = false;
+            } else {
+              const transferTo = pendingPhoneTransfer;
+              pendingPhoneTransfer = null;
+              transferFired = true;
+              log("transfer_firing", { trace_id, tenant_id: tenantId || null, to: transferTo });
+              fireTransfer(transferTo);
+              // Agent is done — close OpenAI to stop further responses/token usage
+              try { openaiWs.close(); } catch (_) {}
+            }
           }
           // Fire hangup after a short delay so audio finishes playing through the phone line
           if (pendingHangup) {
             pendingHangup = false;
-            setTimeout(fireHangup, 1500);
+            setTimeout(fireHangup, 2500);
           }
           break;
 
@@ -495,10 +507,14 @@ wss.on("connection", async (telnyxWs, req) => {
       duration_ms: durationMs,
       turn_count_user: turnCountUser,
       turn_count_assistant: turnCountAssistant,
+      transfer_fired: transferFired,
     });
 
     try { openaiWs.close(); } catch (_) {}
-    try { telnyxWs.close(); } catch (_) {}
+    // Don't close Telnyx WS if a phone transfer is active — Telnyx manages the connection
+    if (!transferFired) {
+      try { telnyxWs.close(); } catch (_) {}
+    }
 
     // --- Post-call webhook ---
     const webhookUrl = tenantConfig?.webhook?.post_call_url;

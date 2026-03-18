@@ -27,4 +27,7 @@ STOPP. Vänta på svar.
 
 Steg 5 — Avslut
 Säg: "Tack [namn]. Jag skickar ärendet till mina kollegor nu, så återkommer de med en tid."
-Anropa end_call direkt efter denna mening.
+STOPP. Vänta på att uppringaren svarar.
+
+Steg 6 — Hej då
+Säg hej då på ett vänligt sätt. Anropa sedan end_call.
