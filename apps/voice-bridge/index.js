@@ -340,6 +340,9 @@ wss.on("connection", async (telnyxWs, req) => {
                 }
               }));
 
+              // If target mode has a phone_transfer number, queue it to fire after response.done
+              const targetModeConfig = tenantConfig.workflow.modes[targetMode];
+
               // 3. Trigger the model to respond in the new mode.
               // For routing modes (no phone_transfer, has transfers), nudge the model to call a tool.
               const isRoutingMode = !targetModeConfig?.phone_transfer && !!targetModeConfig?.transfers;
@@ -347,9 +350,6 @@ wss.on("connection", async (telnyxWs, req) => {
                 ? { type: "response.create", response: { instructions: "Based on the conversation so far, call the appropriate transfer function now." } }
                 : { type: "response.create" };
               openaiWs.send(JSON.stringify(responseCreate));
-
-              // If target mode has a phone_transfer number, queue it to fire after response.done
-              const targetModeConfig = tenantConfig.workflow.modes[targetMode];
               if (targetModeConfig?.phone_transfer) {
                 pendingPhoneTransfer = targetModeConfig.phone_transfer;
               }
