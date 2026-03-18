@@ -8,7 +8,8 @@
   "transcription_language": "sv",
   "entry_mode": "direct_to_gpt",
   "first_message_enabled": true,
-  "first_message": "Hej, du har nått Älvsjö Tandvård. Hur kan jag hjälpa dig?",
+  "first_message": "Hej! Jag är Älvsjös AI-receptionist. Hur kan jag hjälpa dig idag?",
+  "first_message_delay_ms": 0,
 
   "instructions": {
     "base": "$file:configs/prompt-assets/alvsjo-tandvard/system-prompt.md"

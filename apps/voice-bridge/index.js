@@ -143,7 +143,9 @@ wss.on("connection", async (telnyxWs, req) => {
   const firstMessage = !fallback && tenantConfig.first_message_enabled
     ? (tenantConfig.first_message || null)
     : null;
+  const firstMessageDelayMs = tenantConfig?.first_message_delay_ms || 0;
   const transcriptionLanguage = tenantConfig?.transcription_language || null;
+  let audioForwardingReady = (firstMessageDelayMs === 0); // hold off during welcome audio
 
   log("call_start", {
     trace_id,
@@ -211,15 +213,26 @@ wss.on("connection", async (telnyxWs, req) => {
 
     openaiWs.send(JSON.stringify({ type: "session.update", session: sessionPayload }));
 
-    // Trigger first_message using a per-response instruction override.
-    if (firstMessage) {
-      log("first_message", { trace_id, tenant_id: tenantId });
-      openaiWs.send(JSON.stringify({
-        type: "response.create",
-        response: {
-          instructions: `Say exactly: "${firstMessage}". Do not add any other words before or after.`
-        }
-      }));
+    // Trigger first_message — delay if a pre-recorded welcome audio plays first.
+    // During the delay, audio forwarding from Telnyx is suppressed so the welcome
+    // audio doesn't bleed into OpenAI and get interpreted as caller speech.
+    const sendFirstMessage = () => {
+      audioForwardingReady = true;
+      if (firstMessage) {
+        log("first_message", { trace_id, tenant_id: tenantId, delay_ms: firstMessageDelayMs });
+        openaiWs.send(JSON.stringify({
+          type: "response.create",
+          response: {
+            instructions: `Say exactly: "${firstMessage}". Do not add any other words before or after.`
+          }
+        }));
+      }
+    };
+
+    if (firstMessageDelayMs > 0) {
+      setTimeout(sendFirstMessage, firstMessageDelayMs);
+    } else {
+      sendFirstMessage();
     }
   });
 
@@ -228,7 +241,7 @@ wss.on("connection", async (telnyxWs, req) => {
     try {
       const msg = JSON.parse(raw.toString());
 
-      if (!openaiReady || transferFired) return;
+      if (!openaiReady || transferFired || !audioForwardingReady) return;
 
       if (msg.event === "media" && msg.media?.payload) {
         openaiWs.send(JSON.stringify({
