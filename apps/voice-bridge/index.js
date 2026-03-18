@@ -337,8 +337,13 @@ wss.on("connection", async (telnyxWs, req) => {
                 }
               }));
 
-              // 3. Trigger the model to respond in the new mode
-              openaiWs.send(JSON.stringify({ type: "response.create" }));
+              // 3. Trigger the model to respond in the new mode.
+              // For routing modes (no phone_transfer, has transfers), push the model to call a tool immediately.
+              const isRoutingMode = !targetModeConfig?.phone_transfer && !!targetModeConfig?.transfers;
+              const responseCreate = isRoutingMode
+                ? { type: "response.create", response: { instructions: "Call the appropriate transfer function immediately. Do not say anything." } }
+                : { type: "response.create" };
+              openaiWs.send(JSON.stringify(responseCreate));
 
               // If target mode has a phone_transfer number, queue it to fire after response.done
               const targetModeConfig = tenantConfig.workflow.modes[targetMode];
