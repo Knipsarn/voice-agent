@@ -40,11 +40,14 @@ const END_CALL_TOOL = {
   parameters: { type: "object", properties: {}, required: [] }
 };
 
-// Classify workflow mode type for conditional tool/instruction/modality setup
+// Classify workflow mode type for conditional tool/instruction/modality setup.
+// "routing" = silent router (text-only, tool_choice required, no end_call).
+// "phone_transfer" = speaks one line then Telnyx transfers the call.
+// "leaf" = interactive mode that speaks to caller, collects data, may escalate.
 function getModeType(modeConfig) {
   if (!modeConfig) return "leaf";
   if (modeConfig.phone_transfer) return "phone_transfer";
-  if (modeConfig.transfers) return "routing";
+  if (modeConfig.router) return "routing";
   return "leaf";
 }
 
@@ -401,11 +404,15 @@ wss.on("connection", async (telnyxWs, req) => {
             } else {
               const transferTo = pendingPhoneTransfer;
               pendingPhoneTransfer = null;
-              transferFired = true;
+              transferFired = true; // stop audio forwarding immediately
               log("transfer_firing", { trace_id, tenant_id: tenantId || null, to: transferTo });
-              fireTransfer(transferTo);
-              // Agent is done — close OpenAI to stop further responses/token usage
-              try { openaiWs.close(); } catch (_) {}
+              // Delay transfer so agent's audio finishes playing through the phone line
+              // before the caller hears the transfer ringing tone.
+              setTimeout(() => {
+                fireTransfer(transferTo);
+                // Agent is done — close OpenAI to stop further responses/token usage
+                try { openaiWs.close(); } catch (_) {}
+              }, 2000);
             }
           }
           // Fire hangup after a short delay so audio finishes playing through the phone line

@@ -22,6 +22,7 @@
       "QUALIFIER": {
         "label": "Qualification Agent",
         "instructions": "$file:configs/prompt-assets/alvsjo-tandvard/qualifier.md",
+        "router": true,
         "transfers": {
           "transfer_to_LATE":            "Uppringaren säger att de är sena/försenade, på väg, fast i trafik, eller har en tid nu och riskerar att komma sent.",
           "transfer_to_ECONOMICS":       "Ärendet gäller faktura, betalning, priser, ekonomi, eller kontakt från myndighet (t.ex. socialtjänst, Försäkringskassan) eller liknande.",
@@ -33,6 +34,7 @@
       "PATIENT": {
         "label": "Patient Hantering",
         "instructions": "$file:configs/prompt-assets/alvsjo-tandvard/patient.md",
+        "router": true,
         "transfers": {
           "transfer_to_HUMAN_GATE":  "Uppringaren uttrycker att det är akut, eller ber att få prata med en människa/reception.",
           "transfer_to_BOOKING":     "Uppringaren vill boka en ny tid eller boka för första gången.",
@@ -68,15 +70,24 @@
       },
       "BOOKING": {
         "label": "Booking Agent",
-        "instructions": "$file:configs/prompt-assets/alvsjo-tandvard/booking.md"
+        "instructions": "$file:configs/prompt-assets/alvsjo-tandvard/booking.md",
+        "transfers": {
+          "transfer_to_HUMAN_GATE": "Uppringaren uttrycker akut besvär mitt i samtalet (stark tandvärk, svullnad, kan inte svälja, behöver hjälp snabbt)."
+        }
       },
       "RESCHEDULE": {
         "label": "Rescheduling",
-        "instructions": "$file:configs/prompt-assets/alvsjo-tandvard/reschedule.md"
+        "instructions": "$file:configs/prompt-assets/alvsjo-tandvard/reschedule.md",
+        "transfers": {
+          "transfer_to_HUMAN_GATE": "Uppringaren uttrycker akut besvär mitt i samtalet (stark tandvärk, svullnad, kan inte svälja, behöver hjälp snabbt)."
+        }
       },
       "MESSAGE": {
         "label": "Message Intake",
-        "instructions": "$file:configs/prompt-assets/alvsjo-tandvard/message.md"
+        "instructions": "$file:configs/prompt-assets/alvsjo-tandvard/message.md",
+        "transfers": {
+          "transfer_to_HUMAN_GATE": "Uppringaren uttrycker akut besvär mitt i samtalet (stark tandvärk, svullnad, kan inte svälja, behöver hjälp snabbt)."
+        }
       },
       "CANCELLATION": {
         "label": "Avbokning",
