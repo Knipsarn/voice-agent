@@ -3,13 +3,14 @@
   "status": "draft",
   "company_name": "Älvsjö Tandvård",
   "default_language": "sv-SE",
-  "voice": "cedar",
+  "voice": "marin",
   "realtime_model": "gpt-realtime-1.5",
   "transcription_language": "sv",
   "entry_mode": "direct_to_gpt",
   "first_message_enabled": true,
-  "first_message": "Hej! Jag är Älvsjös AI-receptionist. Hur kan jag hjälpa dig idag?",
-  "first_message_delay_ms": 0,
+  "first_message": "Hej, jag är Älvsjös AI-receptionist. Berätta om ditt ärende så hjälper vi dig.",
+  "first_message_delay_ms": 700,
+  "vad_threshold": 0.8,
 
   "instructions": {
     "base": "$file:configs/prompt-assets/alvsjo-tandvard/system-prompt.md"

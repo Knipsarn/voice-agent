@@ -145,6 +145,7 @@ wss.on("connection", async (telnyxWs, req) => {
     : null;
   const firstMessageDelayMs = tenantConfig?.first_message_delay_ms || 0;
   const transcriptionLanguage = tenantConfig?.transcription_language || null;
+  const vadThreshold = tenantConfig?.vad_threshold ?? 0.5; // default 0.5; raise for noisy PSTN lines
   let audioForwardingReady = (firstMessageDelayMs === 0); // hold off during welcome audio
 
   log("call_start", {
@@ -199,6 +200,15 @@ wss.on("connection", async (telnyxWs, req) => {
     if (transcriptionLanguage) {
       sessionPayload.input_audio_transcription.language = transcriptionLanguage;
     }
+
+    // VAD tuning — raise threshold for PSTN lines with echo/sidetone to prevent
+    // the agent's own audio from echoing back and triggering false user turns.
+    sessionPayload.turn_detection = {
+      type: "server_vad",
+      threshold: vadThreshold,
+      prefix_padding_ms: 300,
+      silence_duration_ms: 500,
+    };
 
     // Build tool set: end_call only for leaf modes, transfer tools for workflow modes
     if (workflowEnabled) {
