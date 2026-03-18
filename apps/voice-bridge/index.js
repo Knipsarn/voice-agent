@@ -83,6 +83,7 @@ wss.on("connection", async (telnyxWs, req) => {
   // --- Workflow state (per-connection) ---
   let currentMode = workflowEnabled ? tenantConfig.workflow.initial_mode : null;
   const visitedModes = workflowEnabled ? new Set([currentMode]) : null;
+  let pendingPhoneTransfer = null; // set when mode has phone_transfer; fires after response.done
 
   // Build initial instructions
   let instructions;
@@ -339,6 +340,12 @@ wss.on("connection", async (telnyxWs, req) => {
               // 3. Trigger the model to respond in the new mode
               openaiWs.send(JSON.stringify({ type: "response.create" }));
 
+              // If target mode has a phone_transfer number, queue it to fire after response.done
+              const targetModeConfig = tenantConfig.workflow.modes[targetMode];
+              if (targetModeConfig?.phone_transfer) {
+                pendingPhoneTransfer = targetModeConfig.phone_transfer;
+              }
+
               log("mode_switch", {
                 trace_id,
                 tenant_id: tenantId || null,
@@ -346,6 +353,7 @@ wss.on("connection", async (telnyxWs, req) => {
                 to: targetMode,
                 instructions_length: newInstructions.length,
                 tools_count: newTools.length + 1,
+                phone_transfer: targetModeConfig?.phone_transfer || null,
               });
             }
           }
@@ -354,6 +362,12 @@ wss.on("connection", async (telnyxWs, req) => {
         case "response.done":
           turnCountAssistant++;
           log("response_done", { trace_id, tenant_id: tenantId || null, turn_assistant: turnCountAssistant });
+          // Fire phone transfer after the agent finishes speaking in a transfer mode
+          if (pendingPhoneTransfer) {
+            const transferTo = pendingPhoneTransfer;
+            pendingPhoneTransfer = null;
+            fireTransfer(transferTo);
+          }
           break;
 
         case "error":
@@ -397,6 +411,38 @@ wss.on("connection", async (telnyxWs, req) => {
     });
     telnyxReq.on("error", (err) => {
       logError("hangup_error", { trace_id, tenant_id: tenantId || null, error: err.message });
+    });
+    telnyxReq.write(reqData);
+    telnyxReq.end();
+  }
+
+  // --- Telnyx phone transfer ---
+  function fireTransfer(toNumber) {
+    log("transfer_attempt", { trace_id, tenant_id: tenantId || null, to: toNumber, has_ccid: !!callControlId, has_key: !!TELNYX_API_KEY });
+    if (!callControlId || !TELNYX_API_KEY) {
+      logError("transfer_skipped", { trace_id, tenant_id: tenantId || null, reason: !callControlId ? "no call_control_id" : "no TELNYX_API_KEY" });
+      return;
+    }
+    const transferUrl = new URL(`https://api.telnyx.com/v2/calls/${encodeURIComponent(callControlId)}/actions/transfer`);
+    const reqData = JSON.stringify({ to: toNumber });
+    const telnyxReq = require("https").request(transferUrl, {
+      method: "POST",
+      headers: {
+        "Authorization": `Bearer ${TELNYX_API_KEY}`,
+        "Content-Type": "application/json",
+        "Content-Length": Buffer.byteLength(reqData)
+      },
+      timeout: 8000
+    }, (res) => {
+      log("transfer_sent", { trace_id, tenant_id: tenantId || null, status: res.statusCode, to: toNumber });
+      res.resume();
+    });
+    telnyxReq.on("timeout", () => {
+      logError("transfer_timeout", { trace_id, tenant_id: tenantId || null, to: toNumber });
+      telnyxReq.destroy();
+    });
+    telnyxReq.on("error", (err) => {
+      logError("transfer_error", { trace_id, tenant_id: tenantId || null, to: toNumber, error: err.message });
     });
     telnyxReq.write(reqData);
     telnyxReq.end();
