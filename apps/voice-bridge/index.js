@@ -340,16 +340,27 @@ wss.on("connection", async (telnyxWs, req) => {
                 }
               }));
 
-              // If target mode has a phone_transfer number, queue it to fire after response.done
               const targetModeConfig = tenantConfig.workflow.modes[targetMode];
+              // Routing modes (has transfers, no phone_transfer) must be silent — no audio to caller.
+              // Use modalities:["text"] so the model physically cannot produce audio while routing.
+              // tool_choice:"required" forces an immediate function call with no verbal filler.
+              // Leaf modes and phone-transfer modes restore full audio.
+              const isRoutingMode = !targetModeConfig?.phone_transfer && !!targetModeConfig?.transfers;
+
+              // 1b. Patch session with routing/leaf mode settings (overrides the update already sent)
+              openaiWs.send(JSON.stringify({
+                type: "session.update",
+                session: isRoutingMode
+                  ? { modalities: ["text"], tool_choice: "required" }
+                  : { modalities: ["text", "audio"], output_audio_format: "g711_ulaw", tool_choice: "auto" }
+              }));
 
               // 3. Trigger the model to respond in the new mode.
-              // For routing modes (no phone_transfer, has transfers), nudge the model to call a tool.
-              const isRoutingMode = !targetModeConfig?.phone_transfer && !!targetModeConfig?.transfers;
               const responseCreate = isRoutingMode
                 ? { type: "response.create", response: { instructions: "Based on the conversation so far, call the appropriate transfer function now." } }
                 : { type: "response.create" };
               openaiWs.send(JSON.stringify(responseCreate));
+
               if (targetModeConfig?.phone_transfer) {
                 pendingPhoneTransfer = targetModeConfig.phone_transfer;
               }
