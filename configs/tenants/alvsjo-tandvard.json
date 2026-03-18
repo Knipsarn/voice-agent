@@ -102,6 +102,11 @@
     "mode_switching": true
   },
 
+  "phone_hours": {
+    "timezone": "Europe/Stockholm",
+    "schedule": "Mån–Tors 08:00–20:00, Fre 08:00–17:00, Lör–Sön stängt"
+  },
+
   "phone_numbers": {
     "primary_e164": "+46105201311"
   },

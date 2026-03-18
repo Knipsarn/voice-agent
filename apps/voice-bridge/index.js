@@ -111,12 +111,24 @@ wss.on("connection", async (telnyxWs, req) => {
     ? getModeType(tenantConfig.workflow.modes?.[currentMode])
     : "leaf";
 
+  // Compute current time context for the agent (used for phone hours routing)
+  let timeContext = "";
+  if (tenantConfig?.phone_hours) {
+    const tz = tenantConfig.phone_hours.timezone || "Europe/Stockholm";
+    const now = new Date();
+    const local = new Date(now.toLocaleString("en-US", { timeZone: tz }));
+    const dayNames = ["söndag", "måndag", "tisdag", "onsdag", "torsdag", "fredag", "lördag"];
+    const hh = local.getHours().toString().padStart(2, "0");
+    const mm = local.getMinutes().toString().padStart(2, "0");
+    timeContext = `Aktuell tid: ${dayNames[local.getDay()]} ${hh}:${mm}\n\n`;
+  }
+
   // Build initial instructions
   let instructions;
   if (fallback) {
     instructions = FALLBACK_INSTRUCTIONS;
   } else if (workflowEnabled) {
-    instructions = buildWorkflowInstructions(tenantConfig, currentMode);
+    instructions = timeContext + buildWorkflowInstructions(tenantConfig, currentMode);
   } else {
     instructions = buildInstructions(tenantConfig);
   }
@@ -337,8 +349,9 @@ wss.on("connection", async (telnyxWs, req) => {
               const targetModeConfig = tenantConfig.workflow.modes[targetMode];
               const modeType = getModeType(targetModeConfig);
 
-              // Build instructions — only append END_CALL_ADDENDUM for leaf modes
-              const newInstructions = buildWorkflowInstructions(tenantConfig, targetMode)
+              // Build instructions — prepend time context, append END_CALL_ADDENDUM for leaf modes
+              const newInstructions = timeContext
+                + buildWorkflowInstructions(tenantConfig, targetMode)
                 + (modeType === "leaf" ? END_CALL_ADDENDUM : "");
 
               // Build tools — only include end_call for leaf modes

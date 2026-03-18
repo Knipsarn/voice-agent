@@ -16,7 +16,7 @@ Fråga: "Är det här rätt nummer att nå dig på?"
 STOPP. Vänta på ja eller nej. Om nej, fråga vilket nummer som är rätt.
 
 Steg 3 — Avslut
-Säg: "Tack [namn]. Jag skickar ärendet till mina kollegor direkt. Vi har telefontider måndag till torsdag 08 till 20 och fredag 08 till 17, så de återkommer inom den tiden."
+Säg: "Tack [namn]. Jag skickar ärendet till mina kollegor direkt, så återkommer de."
 STOPP. Vänta på att uppringaren svarar.
 
 Steg 4 — Hej då
