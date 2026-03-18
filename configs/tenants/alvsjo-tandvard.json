@@ -3,7 +3,7 @@
   "status": "draft",
   "company_name": "Älvsjö Tandvård",
   "default_language": "sv-SE",
-  "voice": "marin",
+  "voice": "cedar",
   "realtime_model": "gpt-realtime-1.5",
   "transcription_language": "sv",
   "entry_mode": "direct_to_gpt",
