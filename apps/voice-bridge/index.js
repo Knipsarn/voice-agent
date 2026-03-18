@@ -31,7 +31,22 @@ const DEFAULT_TENANT_ID = process.env.DEFAULT_TENANT_ID || null;
 const DEFAULT_REALTIME_MODEL = process.env.DEFAULT_REALTIME_MODEL || "gpt-realtime-1.5";
 const DEFAULT_VOICE = "alloy";
 const FALLBACK_INSTRUCTIONS = "You are a helpful phone assistant.";
-const END_CALL_ADDENDUM = "\n\n# Samtalsavslut\nDu har tillgång till funktionen `end_call` som lägger på luren. Du MÅSTE anropa end_call när: samtalet är klart, uppringaren säger hejdå eller ber dig lägga på, eller ärendet är avslutat och bekräftat. Säg alltid ett kort avsked INNAN du anropar end_call. Säg aldrig hejdå utan att faktiskt anropa end_call — annars hänger samtalet kvar.";
+const END_CALL_ADDENDUM = "\n\n# Samtalsavslut\nDu har tillgång till funktionen end_call som lägger på luren. Du MÅSTE anropa end_call när: samtalet är klart, uppringaren säger hejdå eller ber dig lägga på, eller ärendet är avslutat och bekräftat. Säg alltid ett kort avsked INNAN du anropar end_call. Säg aldrig hejdå utan att faktiskt anropa end_call — annars hänger samtalet kvar.";
+
+const END_CALL_TOOL = {
+  type: "function",
+  name: "end_call",
+  description: "Physically disconnects the phone call. You MUST call this tool when: (1) the caller says goodbye or asks to hang up, (2) the intake is complete and confirmed, (3) the caller has no further questions. Always say a farewell phrase to the caller BEFORE invoking this tool. Never just say goodbye verbally — you MUST call end_call to actually hang up.",
+  parameters: { type: "object", properties: {}, required: [] }
+};
+
+// Classify workflow mode type for conditional tool/instruction/modality setup
+function getModeType(modeConfig) {
+  if (!modeConfig) return "leaf";
+  if (modeConfig.phone_transfer) return "phone_transfer";
+  if (modeConfig.transfers) return "routing";
+  return "leaf";
+}
 
 // ─── Startup validation ───────────────────────────────────────────────────────
 
@@ -86,6 +101,11 @@ wss.on("connection", async (telnyxWs, req) => {
   let pendingPhoneTransfer = null; // set when mode has phone_transfer; fires after response.done
   let pendingHangup = false;       // set when end_call tool fires; executes after response.done + delay
 
+  // Determine initial mode type for conditional tool/instruction setup
+  const initialModeType = workflowEnabled
+    ? getModeType(tenantConfig.workflow.modes?.[currentMode])
+    : "leaf";
+
   // Build initial instructions
   let instructions;
   if (fallback) {
@@ -95,7 +115,10 @@ wss.on("connection", async (telnyxWs, req) => {
   } else {
     instructions = buildInstructions(tenantConfig);
   }
-  instructions += END_CALL_ADDENDUM;
+  // Only append end_call instructions for leaf modes (not routing or phone_transfer)
+  if (initialModeType === "leaf") {
+    instructions += END_CALL_ADDENDUM;
+  }
 
   const voice = tenantConfig?.voice || DEFAULT_VOICE;
   const realtimeModel = tenantConfig?.realtime_model || DEFAULT_REALTIME_MODEL;
@@ -158,17 +181,12 @@ wss.on("connection", async (telnyxWs, req) => {
       sessionPayload.input_audio_transcription.language = transcriptionLanguage;
     }
 
-    // Build tool set: end_call always present + workflow transfer tools if applicable.
-    const END_CALL_TOOL = {
-      type: "function",
-      name: "end_call",
-      description: "Physically disconnects the phone call. You MUST call this tool when: (1) the caller says goodbye or asks to hang up, (2) the intake is complete and confirmed, (3) the caller has no further questions. Always say a farewell phrase to the caller BEFORE invoking this tool. Never just say goodbye verbally — you MUST call end_call to actually hang up.",
-      parameters: { type: "object", properties: {}, required: [] }
-    };
-
+    // Build tool set: end_call only for leaf modes, transfer tools for workflow modes
     if (workflowEnabled) {
       const transferTools = generateWorkflowTools(tenantConfig, currentMode);
-      sessionPayload.tools = [END_CALL_TOOL, ...transferTools];
+      sessionPayload.tools = initialModeType === "leaf"
+        ? [END_CALL_TOOL, ...transferTools]
+        : transferTools;
     } else {
       sessionPayload.tools = [END_CALL_TOOL];
     }
@@ -303,7 +321,6 @@ wss.on("connection", async (telnyxWs, req) => {
                 break;
               }
 
-              // Loop prevention: allow revisiting modes but log a warning
               if (visitedModes.has(targetMode)) {
                 log("mode_switch_revisit", { trace_id, tenant_id: tenantId || null, from: currentMode, to: targetMode });
               }
@@ -312,25 +329,34 @@ wss.on("connection", async (telnyxWs, req) => {
               currentMode = targetMode;
               visitedModes.add(targetMode);
 
-              // 1. session.update FIRST — new instructions + tools take effect before the response
-              const newInstructions = buildWorkflowInstructions(tenantConfig, targetMode) + END_CALL_ADDENDUM;
-              const newTools = generateWorkflowTools(tenantConfig, targetMode);
-              const END_CALL_TOOL = {
-                type: "function",
-                name: "end_call",
-                description: "Physically disconnects the phone call. You MUST call this tool when: (1) the caller says goodbye or asks to hang up, (2) the intake is complete and confirmed, (3) the caller has no further questions. Always say a farewell phrase to the caller BEFORE invoking this tool. Never just say goodbye verbally — you MUST call end_call to actually hang up.",
-                parameters: { type: "object", properties: {}, required: [] }
-              };
-              openaiWs.send(JSON.stringify({
-                type: "session.update",
-                session: {
-                  instructions: newInstructions,
-                  tools: [END_CALL_TOOL, ...newTools],
-                  tool_choice: "auto"
-                }
-              }));
+              const targetModeConfig = tenantConfig.workflow.modes[targetMode];
+              const modeType = getModeType(targetModeConfig);
 
-              // 2. ACK the function call
+              // Build instructions — only append END_CALL_ADDENDUM for leaf modes
+              const newInstructions = buildWorkflowInstructions(tenantConfig, targetMode)
+                + (modeType === "leaf" ? END_CALL_ADDENDUM : "");
+
+              // Build tools — only include end_call for leaf modes
+              const transferTools = generateWorkflowTools(tenantConfig, targetMode);
+              const tools = modeType === "leaf"
+                ? [END_CALL_TOOL, ...transferTools]
+                : transferTools;
+
+              // Single merged session.update — all fields in one message
+              // Routing modes: text-only + tool_choice required (silent, immediate function call)
+              // Phone transfer & leaf modes: text+audio + tool_choice auto
+              const sessionUpdate = {
+                instructions: newInstructions,
+                tools,
+                tool_choice: modeType === "routing" ? "required" : "auto",
+                modalities: modeType === "routing" ? ["text"] : ["text", "audio"],
+              };
+              if (modeType !== "routing") {
+                sessionUpdate.output_audio_format = "g711_ulaw";
+              }
+              openaiWs.send(JSON.stringify({ type: "session.update", session: sessionUpdate }));
+
+              // ACK the function call
               openaiWs.send(JSON.stringify({
                 type: "conversation.item.create",
                 item: {
@@ -340,26 +366,8 @@ wss.on("connection", async (telnyxWs, req) => {
                 }
               }));
 
-              const targetModeConfig = tenantConfig.workflow.modes[targetMode];
-              // Routing modes (has transfers, no phone_transfer) must be silent — no audio to caller.
-              // Use modalities:["text"] so the model physically cannot produce audio while routing.
-              // tool_choice:"required" forces an immediate function call with no verbal filler.
-              // Leaf modes and phone-transfer modes restore full audio.
-              const isRoutingMode = !targetModeConfig?.phone_transfer && !!targetModeConfig?.transfers;
-
-              // 1b. Patch session with routing/leaf mode settings (overrides the update already sent)
-              openaiWs.send(JSON.stringify({
-                type: "session.update",
-                session: isRoutingMode
-                  ? { modalities: ["text"], tool_choice: "required" }
-                  : { modalities: ["text", "audio"], output_audio_format: "g711_ulaw", tool_choice: "auto" }
-              }));
-
-              // 3. Trigger the model to respond in the new mode.
-              const responseCreate = isRoutingMode
-                ? { type: "response.create", response: { instructions: "Based on the conversation so far, call the appropriate transfer function now." } }
-                : { type: "response.create" };
-              openaiWs.send(JSON.stringify(responseCreate));
+              // Trigger response — no instruction override; full session instructions drive the model
+              openaiWs.send(JSON.stringify({ type: "response.create" }));
 
               if (targetModeConfig?.phone_transfer) {
                 pendingPhoneTransfer = targetModeConfig.phone_transfer;
@@ -370,8 +378,9 @@ wss.on("connection", async (telnyxWs, req) => {
                 tenant_id: tenantId || null,
                 from: previousMode,
                 to: targetMode,
+                mode_type: modeType,
                 instructions_length: newInstructions.length,
-                tools_count: newTools.length + 1,
+                tools_count: tools.length,
                 phone_transfer: targetModeConfig?.phone_transfer || null,
               });
             }
