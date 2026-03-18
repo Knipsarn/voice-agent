@@ -84,6 +84,7 @@ wss.on("connection", async (telnyxWs, req) => {
   let currentMode = workflowEnabled ? tenantConfig.workflow.initial_mode : null;
   const visitedModes = workflowEnabled ? new Set([currentMode]) : null;
   let pendingPhoneTransfer = null; // set when mode has phone_transfer; fires after response.done
+  let pendingHangup = false;       // set when end_call tool fires; executes after response.done + delay
 
   // Build initial instructions
   let instructions;
@@ -284,7 +285,9 @@ wss.on("connection", async (telnyxWs, req) => {
                   output: JSON.stringify({ success: true })
                 }
               }));
-              fireHangup();
+              // Don't hang up immediately — audio may still be streaming through the phone.
+              // Set flag; response.done will fire hangup after a short buffer delay.
+              pendingHangup = true;
 
             } else if (workflowEnabled && fnName.startsWith("transfer_to_")) {
               const targetMode = fnName.replace("transfer_to_", "");
@@ -338,10 +341,10 @@ wss.on("connection", async (telnyxWs, req) => {
               }));
 
               // 3. Trigger the model to respond in the new mode.
-              // For routing modes (no phone_transfer, has transfers), push the model to call a tool immediately.
+              // For routing modes (no phone_transfer, has transfers), nudge the model to call a tool.
               const isRoutingMode = !targetModeConfig?.phone_transfer && !!targetModeConfig?.transfers;
               const responseCreate = isRoutingMode
-                ? { type: "response.create", response: { instructions: "Call the appropriate transfer function immediately. Do not say anything." } }
+                ? { type: "response.create", response: { instructions: "Based on the conversation so far, call the appropriate transfer function now." } }
                 : { type: "response.create" };
               openaiWs.send(JSON.stringify(responseCreate));
 
@@ -367,11 +370,16 @@ wss.on("connection", async (telnyxWs, req) => {
         case "response.done":
           turnCountAssistant++;
           log("response_done", { trace_id, tenant_id: tenantId || null, turn_assistant: turnCountAssistant });
-          // Fire phone transfer after the agent finishes speaking in a transfer mode
+          // Fire phone transfer after agent finishes speaking in a transfer mode
           if (pendingPhoneTransfer) {
             const transferTo = pendingPhoneTransfer;
             pendingPhoneTransfer = null;
             fireTransfer(transferTo);
+          }
+          // Fire hangup after a short delay so audio finishes playing through the phone line
+          if (pendingHangup) {
+            pendingHangup = false;
+            setTimeout(fireHangup, 1500);
           }
           break;
 
