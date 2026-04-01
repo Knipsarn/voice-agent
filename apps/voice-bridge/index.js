@@ -77,7 +77,7 @@ const wss = new WebSocketServer({ server });
 
 // ─── Per-connection handler ───────────────────────────────────────────────────
 
-wss.on("connection", async (telnyxWs, req) => {
+wss.on("connection", async (phoneWs, req) => {
   const trace_id = crypto.randomUUID();
   const callStart = Date.now();
   let openaiReadyTime = null;
@@ -86,11 +86,45 @@ wss.on("connection", async (telnyxWs, req) => {
   let turnCountAssistant = 0;
   const transcripts = [];
 
+  // --- Provider detection ---
+  const pathname = url.parse(req.url).pathname || "/";
+  const isElks = pathname.startsWith("/elks");
+  const provider = isElks ? "46elks" : "telnyx";
+
+  // For 46elks: wait for "hello" message to get call metadata before proceeding.
+  // 46elks connects directly (no n8n intermediary).
+  let elksHello = null;
+  if (isElks) {
+    const helloRaw = await new Promise((resolve, reject) => {
+      const timeout = setTimeout(() => reject(new Error("46elks hello timeout")), 10000);
+      phoneWs.once("message", (raw) => { clearTimeout(timeout); resolve(raw); });
+      phoneWs.once("close", () => { clearTimeout(timeout); reject(new Error("closed before hello")); });
+    }).catch((err) => {
+      logError("elks_hello_error", { trace_id, error: err.message });
+      return null;
+    });
+    if (!helloRaw) { try { phoneWs.close(); } catch (_) {} return; }
+    elksHello = JSON.parse(helloRaw.toString());
+    if (elksHello.t !== "hello") {
+      logError("elks_unexpected_message", { trace_id, type: elksHello.t });
+      try { phoneWs.close(); } catch (_) {} return;
+    }
+    log("elks_hello", { trace_id, callid: elksHello.callid, from: elksHello.from, to: elksHello.to });
+
+    // Tell 46elks we want pcm_24000 (24kHz) — maps directly to OpenAI pcm16
+    phoneWs.send(JSON.stringify({ t: "listening", format: "pcm_24000" }));
+    phoneWs.send(JSON.stringify({ t: "sending", format: "pcm_24000" }));
+  }
+
+  // Audio format: 46elks uses pcm16 (24kHz HD), Telnyx uses g711_ulaw (8kHz)
+  const audioFormat = isElks ? "pcm16" : "g711_ulaw";
+
   // --- Tenant resolution ---
   const query = url.parse(req.url, true).query;
   const tenantId = query.tenant || DEFAULT_TENANT_ID;
-  // URL query parsing decodes "+" as space — restore leading "+" for E.164 numbers
-  const callerNumber = query.caller ? query.caller.trim().replace(/^(\d)/, "+$1") : null;
+  const callerNumber = isElks
+    ? (elksHello?.from || null)
+    : (query.caller ? query.caller.trim().replace(/^(\d)/, "+$1") : null);
   const sessionId = query["session-id"] || null;
   const callControlId = query["call_control_id"] || query["control-id"] || null;
 
@@ -151,9 +185,12 @@ wss.on("connection", async (telnyxWs, req) => {
   log("call_start", {
     trace_id,
     tenant_id: tenantId || null,
+    provider,
+    audio_format: audioFormat,
     session_id: sessionId,
     caller_number: callerNumber,
     call_control_id: callControlId,
+    elks_callid: elksHello?.callid || null,
     model: realtimeModel,
     voice,
     entry_mode: entryMode,
@@ -187,12 +224,12 @@ wss.on("connection", async (telnyxWs, req) => {
       latency_ms: openaiReadyTime - callStart,
     });
 
-    // Audio codec path: g711_ulaw in and out — do not change
+    // Audio codec: g711_ulaw for Telnyx (8kHz), pcm16 for 46elks (24kHz HD)
     const sessionPayload = {
       instructions,
       voice,
-      input_audio_format: "g711_ulaw",
-      output_audio_format: "g711_ulaw"
+      input_audio_format: audioFormat,
+      output_audio_format: audioFormat
     };
 
     // Always enable transcription so user speech is logged; language hint is optional.
@@ -246,25 +283,39 @@ wss.on("connection", async (telnyxWs, req) => {
     }
   });
 
-  // --- Telnyx -> OpenAI ---
-  telnyxWs.on("message", (raw) => {
+  // --- Phone -> OpenAI ---
+  phoneWs.on("message", (raw) => {
     try {
       const msg = JSON.parse(raw.toString());
 
       if (!openaiReady || transferFired || !audioForwardingReady) return;
 
-      if (msg.event === "media" && msg.media?.payload) {
-        openaiWs.send(JSON.stringify({
-          type: "input_audio_buffer.append",
-          audio: msg.media.payload
-        }));
-      }
-
-      if (msg.event === "stop") {
-        openaiWs.close();
+      if (isElks) {
+        // 46elks: { t: "audio", data: "<base64>" }
+        if (msg.t === "audio" && msg.data) {
+          openaiWs.send(JSON.stringify({
+            type: "input_audio_buffer.append",
+            audio: msg.data
+          }));
+        }
+        if (msg.t === "bye") {
+          log("elks_bye", { trace_id, tenant_id: tenantId || null, reason: msg.reason, message: msg.message });
+          openaiWs.close();
+        }
+      } else {
+        // Telnyx (via n8n): { event: "media", media: { payload: "<base64>" } }
+        if (msg.event === "media" && msg.media?.payload) {
+          openaiWs.send(JSON.stringify({
+            type: "input_audio_buffer.append",
+            audio: msg.media.payload
+          }));
+        }
+        if (msg.event === "stop") {
+          openaiWs.close();
+        }
       }
     } catch (err) {
-      logError("telnyx_parse_error", { trace_id, tenant_id: tenantId || null, error: err.message });
+      logError("phone_parse_error", { trace_id, tenant_id: tenantId || null, provider, error: err.message });
     }
   });
 
@@ -321,10 +372,11 @@ wss.on("connection", async (telnyxWs, req) => {
                 latency_ms: Date.now() - callStart,
               });
             }
-            telnyxWs.send(JSON.stringify({
-              event: "media",
-              media: { payload: msg.delta }
-            }));
+            if (isElks) {
+              phoneWs.send(JSON.stringify({ t: "audio", data: msg.delta }));
+            } else {
+              phoneWs.send(JSON.stringify({ event: "media", media: { payload: msg.delta } }));
+            }
           }
           break;
 
@@ -393,7 +445,7 @@ wss.on("connection", async (telnyxWs, req) => {
                 modalities: modeType === "routing" ? ["text"] : ["text", "audio"],
               };
               if (modeType !== "routing") {
-                sessionUpdate.output_audio_format = "g711_ulaw";
+                sessionUpdate.output_audio_format = audioFormat;
               }
               openaiWs.send(JSON.stringify({ type: "session.update", session: sessionUpdate }));
 
@@ -471,14 +523,22 @@ wss.on("connection", async (telnyxWs, req) => {
     }
   });
 
-  // --- Telnyx hangup ---
+  // --- Hangup ---
   function fireHangup() {
-    log("hangup_attempt", { trace_id, tenant_id: tenantId || null, has_ccid: !!callControlId, has_key: !!TELNYX_API_KEY });
+    log("hangup_attempt", { trace_id, tenant_id: tenantId || null, provider });
+
+    if (isElks) {
+      // 46elks: send bye message — 46elks flushes buffered audio before disconnecting
+      try { phoneWs.send(JSON.stringify({ t: "bye" })); } catch (_) {}
+      log("hangup_sent", { trace_id, tenant_id: tenantId || null, provider: "46elks" });
+      return;
+    }
+
+    // Telnyx: Call Control API hangup
     if (!callControlId || !TELNYX_API_KEY) {
       logError("hangup_skipped", { trace_id, tenant_id: tenantId || null, reason: !callControlId ? "no call_control_id" : "no TELNYX_API_KEY" });
       return;
     }
-    // URL-encode the call_control_id — it may contain ":" which confuses URL parsers
     const hangupUrl = new URL(`https://api.telnyx.com/v2/calls/${encodeURIComponent(callControlId)}/actions/hangup`);
     const reqData = JSON.stringify({});
     const telnyxReq = require("https").request(hangupUrl, {
@@ -554,9 +614,9 @@ wss.on("connection", async (telnyxWs, req) => {
     });
 
     try { openaiWs.close(); } catch (_) {}
-    // Don't close Telnyx WS if a phone transfer is active — Telnyx manages the connection
+    // Don't close phone WS if a phone transfer is active — Telnyx manages the connection
     if (!transferFired) {
-      try { telnyxWs.close(); } catch (_) {}
+      try { phoneWs.close(); } catch (_) {}
     }
 
     // --- Post-call webhook ---
@@ -607,11 +667,11 @@ wss.on("connection", async (telnyxWs, req) => {
     }
   }
 
-  telnyxWs.on("close", endCall);
+  phoneWs.on("close", endCall);
   openaiWs.on("close", endCall);
 
-  telnyxWs.on("error", (err) =>
-    logError("telnyx_ws_error", { trace_id, tenant_id: tenantId || null, error: err.message })
+  phoneWs.on("error", (err) =>
+    logError("phone_ws_error", { trace_id, tenant_id: tenantId || null, provider, error: err.message })
   );
 
   openaiWs.on("error", (err) =>
