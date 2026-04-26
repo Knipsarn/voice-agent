@@ -599,8 +599,11 @@ wss.on("connection", async (phoneWs, req) => {
 
   // --- Cleanup ---
   // endCall() is guarded against double-invocation — fires from whichever WS closes first.
+  // Async because Phase B.2 writes call_sessions to Firestore and we need to await
+  // it before the container's CPU is throttled (Cloud Run pauses background work
+  // after the active connection ends).
   let callEnded = false;
-  function endCall() {
+  async function endCall() {
     if (callEnded) return;
     callEnded = true;
 
@@ -621,21 +624,26 @@ wss.on("connection", async (phoneWs, req) => {
     }
 
     // Phase B.2: append bridge-side data to call_sessions/<call_control_id>.
-    // Fire-and-forget — must not block the post-call webhook below.
-    writeCallSessionBridgeData({
-      callControlId,
-      traceId: trace_id,
-      transcript: transcripts,
-      turnCountUser,
-      turnCountAssistant,
-      durationMs,
-      voice,
-      realtimeModel,
-      visitedModes,
-      currentMode,
-      workflowEnabled,
-      transferFired,
-    });
+    // AWAITED — Cloud Run throttles CPU after the active connection ends, so
+    // fire-and-forget would silently lose the write.
+    try {
+      await writeCallSessionBridgeData({
+        callControlId,
+        traceId: trace_id,
+        transcript: transcripts,
+        turnCountUser,
+        turnCountAssistant,
+        durationMs,
+        voice,
+        realtimeModel,
+        visitedModes,
+        currentMode,
+        workflowEnabled,
+        transferFired,
+      });
+    } catch (err) {
+      logError("call_session_bridge_unhandled", { trace_id, error: err.message });
+    }
 
     // --- Post-call webhook ---
     const webhookUrl = tenantConfig?.webhook?.post_call_url;
