@@ -1,0 +1,15 @@
+{
+  "name": "telephony-service",
+  "version": "1.0.0",
+  "description": "Centralized telephony provider gateway. Owns Telnyx webhooks, routes inbound calls to voice-bridge by destination number.",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js",
+    "dev": "node --watch index.js"
+  },
+  "dependencies": {
+    "@google-cloud/firestore": "^7.0.0",
+    "dotenv": "^16.4.0",
+    "express": "^4.21.0"
+  }
+}

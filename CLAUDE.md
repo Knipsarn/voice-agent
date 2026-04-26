@@ -28,39 +28,47 @@ knowledge blocks, voice, and language.
 
 ## 2. Architecture
 
-```
-Caller -> Telnyx -> n8n (webhook) -> WSS -> voice-bridge-service (Cloud Run)
-                                                |
-                                    Firestore tenants/<id> (runtime config)
-                                                |
-                                    OpenAI Realtime API (gpt-realtime-1.5)
+Inbound call path is mid-cutover from n8n to `telephony-service`. Both run in parallel, per-number.
 
-Operator (you) -> scripts/ops/* -> control-plane-service (Cloud Run)
+```
+Caller -> Telnyx -> [telephony-service OR n8n] -> WSS -> voice-bridge-service
+                          |                                     |
+                Firestore phone_numbers/<e164>      Firestore tenants/<id>
+                (lookup tenant by destination)      (runtime tenant config)
+                                                              |
+                                                  OpenAI Realtime API (gpt-realtime-1.5)
+
+Operator (you) -> scripts/ops/* -> control-plane-service
                                         |           |
                                    Firestore    Cloud Logging
 ```
+
+Routing: which path a call takes depends on which Telnyx Call Control App the number is currently attached to. See `docs/telephony-cutover-runbook.md` and the `phone_numbers` Firestore collection.
 
 ### Services
 | Service | Runtime | Purpose |
 |---------|---------|---------|
 | `voice-bridge-service` | Cloud Run, `europe-west1` | Handles live calls, bridges Telnyx<->OpenAI |
 | `control-plane-service` | Cloud Run, `europe-west1` | Operator API: tenant CRUD, diff, publish, logs |
+| `telephony-service` | Cloud Run, `europe-west1` | Telnyx webhook gateway. Routes inbound calls to bridge by destination number. Phase A — replacing n8n. |
 
 ### Data stores
 | Store | Purpose |
 |-------|---------|
 | Firestore `tenants/<id>` | Runtime tenant configs (what the bridge reads per call) |
+| Firestore `phone_numbers/<e164>` | Number → tenant mapping. Read by `telephony-service` on every inbound call. |
 | Git `configs/tenants/*.json` | Authoring source-of-truth |
 | Git `configs/prompt-assets/<id>/*.md` | Modular prompt files, referenced via `$file:` |
 | Cloud Logging | Call logs, errors, bridge lifecycle events |
-| Secret Manager | `OPENAI_API_KEY`, `CONTROL_PLANE_API_KEY`, `TELNYX_API_KEY` |
+| Secret Manager | `OPENAI_API_KEY`, `CONTROL_PLANE_API_KEY`, `TELNYX_API_KEY`, `TELNYX_PUBLIC_KEY` |
 
 ### Key constraints
 - Audio codec: **G.711 ulaw** — never change
 - Model: **gpt-realtime-1.5** — do not switch unless explicitly instructed
-- n8n handles Telnyx webhooks — do NOT change
+- New numbers go on the shared Telnyx Call Control App `voice-platform-shared` (ID `2946878804032751101`) — never create per-tenant apps
+- n8n still handles inbound for un-cut-over numbers; do NOT change those flows until the number is migrated to `telephony-service`
 - Tenant identity: `?tenant=<tenantId>` query param on the WebSocket URL
-- Full n8n WSS URL format: `wss://voice-bridge-service-...?tenant=<id>&caller=<e164>&session-id=<uuid>&control-id=<call_control_id>`
+- Full WSS URL format (built by both n8n and telephony-service): `wss://voice-bridge-service-...?tenant=<id>&caller=<e164>&session-id=<uuid>&control-id=<call_control_id>`
 - `containerConcurrency: 1` — one call per instance, cold start on parallel calls
 - `min instances: 1` — always one warm instance
 
@@ -385,16 +393,29 @@ CONTROL_PLANE_BASE_URL=https://<control-plane-url>
 
 ## 13. Upcoming roadmap
 
+Anchored to the founder's developer brief (`Autonomous Ai Telephony Platform Developer Brief.pdf` at repo root). Build order in §19 of that brief is authoritative.
+
 ### Completed this sprint
 - ✅ Structured tracing (trace_id, jsonPayload, all call lifecycle events)
-- ✅ CI/CD Cloud Build triggers (push to main → auto-deploy both services)
+- ✅ CI/CD Cloud Build triggers (push to main → auto-deploy services)
 - ✅ enkla-juridik onboarded (Aila, voice marin, sv-SE, direct_to_gpt, post-call webhook)
 - ✅ Post-call webhook (transcript + metadata → n8n after call ends)
 - ✅ Agent end_call tool (AI can hang up via Telnyx Call Control API)
 - ✅ caller_number + session_id + call_control_id in WSS URL and logs
 - ✅ TELNYX_API_KEY in Secret Manager
+- ✅ alvsjo-tandvard onboarded (11-mode workflow, voice marin, phone +46105201311, phone transfer)
 
-### Immediate (next sessions)
+### Telephony centralization (active sprint — replaces n8n in inbound path)
+- ✅ **Phase A — code**: `apps/telephony/` written (signature verify, number router, Telnyx client, webhook handler), `Dockerfile.telephony` + `cloudbuild.telephony.yaml` ready
+- ✅ Shared Call Control App `voice-platform-shared` created in Telnyx (ID `2946878804032751101`)
+- ⏳ **Phase A — deploy + cutover**: see `docs/telephony-cutover-runbook.md`. Add `TELNYX_PUBLIC_KEY` to Secret Manager → create Cloud Build trigger → deploy → write `phone_numbers/+46105201311` Firestore doc → re-attach number → test call
+- ⏳ Phase B — structured post-call object (combine telephony hangup + bridge transcript)
+- ⏳ Phase C — SMS (new messaging profile, attach to numbers, `POST /v1/sms` endpoint)
+- ⏳ Phase D — Outbound voice (new outbound voice profile with `SE` whitelisted + spend cap, `POST /v1/calls/outbound`)
+- ⏳ Phase E — Number lifecycle API (search/buy/assign/release)
+- ⏳ Phase F — Customer dashboard
+
+### Other immediate items (not blocked by telephony cutover)
 1. **enkla-juridik status → active** — Set status to "active" in Git, re-publish when ready for production
 2. **Aggregate stats** — `tenant-stats.js` for call volume, avg duration, error rate per tenant
 3. **Control-plane ingress hardening** — Currently `allow-unauthenticated`. Restrict to Cloud IAP or IP allowlist.

@@ -1,0 +1,15 @@
+FROM node:20-alpine
+
+WORKDIR /app/apps/telephony
+
+# Install production dependencies first (layer cache friendly)
+COPY apps/telephony/package*.json ./
+RUN npm install --omit=dev
+
+# Copy source
+COPY apps/telephony/index.js ./
+COPY apps/telephony/routes ./routes
+COPY apps/telephony/lib ./lib
+
+EXPOSE 8080
+CMD ["node", "index.js"]
