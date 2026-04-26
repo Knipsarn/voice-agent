@@ -1,0 +1,47 @@
+steps:
+  - name: 'gcr.io/cloud-builders/docker'
+    args:
+      - build
+      - -f
+      - Dockerfile.post-processor
+      - -t
+      - gcr.io/ldk-clean/post-processor-service
+      - .
+
+  - name: 'gcr.io/cloud-builders/docker'
+    args:
+      - push
+      - gcr.io/ldk-clean/post-processor-service
+
+  - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
+    entrypoint: gcloud
+    args:
+      - run
+      - deploy
+      - post-processor-service
+      - --image=gcr.io/ldk-clean/post-processor-service:latest
+      - --region=europe-west1
+      - --project=ldk-clean
+      - --update-secrets=OPENAI_API_KEY=OPENAI_API_KEY:latest
+      - --allow-unauthenticated
+      - --no-cpu-throttling
+      - --min-instances=0
+      - --max-instances=5
+      - --quiet
+
+  - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
+    entrypoint: gcloud
+    args:
+      - run
+      - services
+      - update-traffic
+      - post-processor-service
+      - --to-latest
+      - --region=europe-west1
+      - --project=ldk-clean
+
+images:
+  - gcr.io/ldk-clean/post-processor-service
+
+options:
+  logging: CLOUD_LOGGING_ONLY

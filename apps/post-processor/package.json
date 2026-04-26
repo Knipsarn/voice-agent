@@ -1,0 +1,15 @@
+{
+  "name": "post-processor",
+  "version": "1.0.0",
+  "description": "Reads completed call_sessions, generates dentist-chart summary via cheap LLM, writes back with cost tracking.",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js",
+    "dev": "node --watch index.js"
+  },
+  "dependencies": {
+    "@google-cloud/firestore": "^7.0.0",
+    "dotenv": "^16.4.0",
+    "express": "^4.21.0"
+  }
+}
