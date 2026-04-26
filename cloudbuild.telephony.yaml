@@ -24,6 +24,9 @@ steps:
       - --project=ldk-clean
       - --update-secrets=TELNYX_API_KEY=TELNYX_API_KEY:latest,TELNYX_PUBLIC_KEY=TELNYX_PUBLIC_KEY:latest
       - --allow-unauthenticated
+      - --no-cpu-throttling
+      - --min-instances=1
+      - --max-instances=20
       - --quiet
 
   - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'

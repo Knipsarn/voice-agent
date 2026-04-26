@@ -75,7 +75,13 @@ function handleCallHangup(payload, traceId) {
 
 // Webhook handler. Mounted at POST / (parent mounts at /webhooks/telnyx).
 // Requires the raw-body parser at the parent level so signature verification sees exact bytes.
-router.post("/", (req, res) => {
+//
+// We AWAIT the handler before acking. Cloud Run throttles CPU after res.end(),
+// so fire-and-forget caused multi-second delays which made answer commands fail
+// with 422 "Call has already ended". Waiting for the handler keeps the request
+// alive (and CPU running) until the work is done. Telnyx webhook timeout is
+// generous (>10s) and our handler completes in <2s.
+router.post("/", async (req, res) => {
   const traceId = crypto.randomUUID();
   const sigHeader = req.header("telnyx-signature-ed25519");
   const tsHeader = req.header("telnyx-timestamp");
@@ -98,23 +104,20 @@ router.post("/", (req, res) => {
   const eventType = event?.event_type;
   const payload = event?.payload || {};
 
-  // Ack Telnyx immediately so retries don't pile up. Fire-and-forget the side effects.
+  try {
+    if (eventType === "call.initiated") {
+      await handleCallInitiated(payload, traceId);
+    } else if (eventType === "call.hangup") {
+      handleCallHangup(payload, traceId);
+    } else {
+      log("webhook_event_ignored", { trace_id: traceId, event_type: eventType });
+    }
+  } catch (err) {
+    // Always 200 anyway — retries on a hangup we already started would be worse than swallowing the error.
+    logError("webhook_handler_error", { trace_id: traceId, event_type: eventType, error: err.message });
+  }
+
   res.status(200).end();
-
-  if (eventType === "call.initiated") {
-    handleCallInitiated(payload, traceId).catch((err) =>
-      logError("call_initiated_handler_error", { trace_id: traceId, error: err.message }),
-    );
-    return;
-  }
-
-  if (eventType === "call.hangup") {
-    handleCallHangup(payload, traceId);
-    return;
-  }
-
-  // Other events (call.answered, streaming.started, etc.) — log and move on.
-  log("webhook_event_ignored", { trace_id: traceId, event_type: eventType });
 });
 
 module.exports = router;
