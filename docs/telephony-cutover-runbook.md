@@ -14,9 +14,10 @@ Still to do before first cutover:
 2. Create the Cloud Build trigger that watches `cloudbuild.telephony.yaml`
 3. First deploy (manual via `gcloud builds submit` or wait for trigger)
 4. Smoke test the deployed `/health`
-5. Write the first `phone_numbers` Firestore doc
-6. Re-attach one number from its old per-tenant app to `voice-platform-shared`
-7. Test call
+5. Re-deploy `control-plane-service` to pick up the new `/numbers` route
+6. Cutover one number with `scripts/ops/number-cutover.js`
+7. Verify with `scripts/ops/number-show.js`
+8. Test call + watch logs
 
 ---
 
@@ -95,49 +96,47 @@ Expected:
 
 Any `false` for the keys → deploy didn't pick up Secret Manager. Check the run config in GCP Console.
 
-## Step 5 — Write the phone_numbers Firestore doc (first cutover: alvsjo-tandvard)
+## Step 4b — Re-deploy control-plane to expose the new `/numbers` route
 
-Run from a machine with `gcloud auth application-default login` already done. Either via gcloud or a tiny Node script:
-
-```bash
-gcloud firestore documents write \
-  --project=ldk-clean \
-  --collection=phone_numbers \
-  --document=+46105201311 \
-  --data='{
-    "tenant_id": "alvsjo-tandvard",
-    "provider": "telnyx",
-    "provider_number_id": "2784931579334493615",
-    "call_control_app_id": "2946878804032751101",
-    "capabilities": {"voice": true, "sms": false, "outbound": false},
-    "status": "active",
-    "assigned_at": "2026-04-27T00:00:00Z"
-  }'
-```
-
-(If the gcloud sub-command doesn't exist on your version, use the Firestore console UI or a small Node script that calls `Firestore.doc('phone_numbers/+46105201311').set({...})`.)
-
-## Step 6 — Re-attach the number to the shared app
-
-This is the actual cutover moment. Once this completes, the next call to `+46105201311` hits `telephony-service` instead of n8n.
+The cutover script calls control-plane endpoints (`POST /numbers/:e164/assign`, etc.) that ship with this sprint. Push to main triggers an auto-deploy of control-plane, OR one-shot:
 
 ```bash
-TELNYX_API_KEY="<from .env>"
-NUMBER_ID="2784931579334493615"   # +46105201311
-NEW_APP_ID="2946878804032751101"  # voice-platform-shared
-
-curl -X PATCH "https://api.telnyx.com/v2/phone_numbers/${NUMBER_ID}/voice" \
-  -H "Authorization: Bearer ${TELNYX_API_KEY}" \
-  -H "Content-Type: application/json" \
-  -d "{\"connection_id\": \"${NEW_APP_ID}\"}"
+gcloud builds submit --config=cloudbuild.control-plane.yaml --project=ldk-clean
 ```
 
-Verify:
+Quick smoke test:
 ```bash
-curl -H "Authorization: Bearer ${TELNYX_API_KEY}" \
-  "https://api.telnyx.com/v2/phone_numbers/${NUMBER_ID}" | python -c "import json,sys; d=json.load(sys.stdin)['data']; print(d['phone_number'], '->', d['connection_name'], d['connection_id'])"
+curl -H "Authorization: Bearer $CONTROL_PLANE_API_KEY" \
+  https://control-plane-service-360579353014.europe-west1.run.app/numbers
+# Expect: {"count": 0, "numbers": []}  (empty before any cutover)
 ```
-Expected: `+46105201311 -> voice-platform-shared 2946878804032751101`
+
+## Step 5 — Cut the number over (writes Firestore doc + reattaches in Telnyx in one command)
+
+Dry run first to confirm what will happen:
+```bash
+node scripts/ops/number-cutover.js +46105201311 --tenant=alvsjo-tandvard --dry-run
+```
+
+Then for real:
+```bash
+node scripts/ops/number-cutover.js +46105201311 --tenant=alvsjo-tandvard
+```
+
+This is the actual cutover moment. Once it completes, the next call to `+46105201311` routes via `telephony-service`.
+
+The script:
+1. Looks up the number's current Telnyx record
+2. Writes `phone_numbers/+46105201311` to Firestore (with `previous_connection_id` for rollback)
+3. PATCHes the Telnyx number's `connection_id` to the shared app (`2946878804032751101`)
+4. Verifies the change took effect
+
+## Step 6 — Verify
+
+```bash
+node scripts/ops/number-show.js +46105201311
+node scripts/ops/numbers-list.js
+```
 
 ## Step 7 — Test call
 
@@ -163,27 +162,22 @@ Expect in `voice-bridge-service` logs:
 
 ## Rollback (if anything goes wrong)
 
-A single API call points the number back at the old per-tenant app:
+One command — reads `previous_connection_id` from Firestore, points the number back at the old per-tenant app, and removes the Firestore assignment:
 
 ```bash
-# alvsjo old app
-curl -X PATCH "https://api.telnyx.com/v2/phone_numbers/2784931579334493615/voice" \
-  -H "Authorization: Bearer ${TELNYX_API_KEY}" \
-  -H "Content-Type: application/json" \
-  -d '{"connection_id": "2917849237788034114"}'
-
-# enkla old app (if cut over)
-# connection_id: 2901883334340642796
+node scripts/ops/number-rollback.js +46105201311
 ```
 
 The old per-tenant apps stay live with their n8n webhooks until both numbers are cut over and stable.
 
 ## Step 8 — Cut over enkla-juridik
 
-Repeat steps 5–7 for `+46105201287`:
-- Firestore doc: `phone_numbers/+46105201287` with `tenant_id: enkla-juridik`, `provider_number_id: 2782728428716033309`
-- Re-attach to app `2946878804032751101`
-- Test call
+```bash
+node scripts/ops/number-cutover.js +46105201287 --tenant=enkla-juridik --dry-run
+node scripts/ops/number-cutover.js +46105201287 --tenant=enkla-juridik
+```
+
+Then test call. Same verification as Step 7.
 
 ## When both tenants are stable
 
