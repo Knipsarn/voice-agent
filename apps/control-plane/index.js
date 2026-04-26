@@ -23,6 +23,7 @@ const express = require("express");
 const tenantsRouter = require("./routes/tenants");
 const logsRouter = require("./routes/logs");
 const numbersRouter = require("./routes/numbers");
+const callsRouter = require("./routes/calls");
 
 const app = express();
 app.use(express.json());
@@ -53,6 +54,7 @@ app.get("/health", (req, res) => {
 app.use("/tenants", tenantsRouter);
 app.use("/logs", logsRouter);
 app.use("/numbers", numbersRouter);
+app.use("/calls", callsRouter);
 
 // ── 404 ──────────────────────────────────────────────────────────────────────
 app.use((req, res) => {
