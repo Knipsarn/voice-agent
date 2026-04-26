@@ -5,6 +5,7 @@ const { log, logError } = require("../lib/log");
 const { verifyTelnyxSignature } = require("../lib/telnyxSignature");
 const { lookupTenantByNumber } = require("../lib/numberRouter");
 const { answerWithStream } = require("../lib/telnyxClient");
+const callSessions = require("../lib/callSessions");
 
 const router = express.Router();
 
@@ -55,12 +56,27 @@ async function handleCallInitiated(payload, traceId) {
     call_control_id: callControlId,
   });
 
+  // Phase B.1: persist call_sessions doc as soon as we know the tenant.
+  // Failure here must not block the answer — safeSet swallows + logs.
+  await callSessions.createOnInitiated({
+    payload,
+    traceId,
+    tenantId: lookup.tenantId,
+    sessionId,
+  });
+
   await answerWithStream({ callControlId, streamUrl: wssUrl, traceId });
 }
 
-function handleCallHangup(payload, traceId) {
-  // Phase A: log only. Structured post-call object is built in Phase B,
-  // combining Telnyx hangup metadata with bridge-side transcript/turn data.
+async function handleCallAnswered(payload, traceId) {
+  log("call_answered", {
+    trace_id: traceId,
+    call_control_id: payload.call_control_id,
+  });
+  await callSessions.updateOnAnswered({ payload, traceId });
+}
+
+async function handleCallHangup(payload, traceId) {
   log("call_end", {
     trace_id: traceId,
     call_control_id: payload.call_control_id,
@@ -71,6 +87,7 @@ function handleCallHangup(payload, traceId) {
     start_time: payload.start_time,
     end_time: payload.end_time,
   });
+  await callSessions.updateOnHangup({ payload, traceId });
 }
 
 // Webhook handler. Mounted at POST / (parent mounts at /webhooks/telnyx).
@@ -107,8 +124,10 @@ router.post("/", async (req, res) => {
   try {
     if (eventType === "call.initiated") {
       await handleCallInitiated(payload, traceId);
+    } else if (eventType === "call.answered") {
+      await handleCallAnswered(payload, traceId);
     } else if (eventType === "call.hangup") {
-      handleCallHangup(payload, traceId);
+      await handleCallHangup(payload, traceId);
     } else {
       log("webhook_event_ignored", { trace_id: traceId, event_type: eventType });
     }
