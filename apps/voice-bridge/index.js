@@ -10,6 +10,7 @@ const url = require("url");
 const crypto = require("crypto");
 
 const { loadTenant, buildInstructions, buildWorkflowInstructions, generateWorkflowTools, isWorkflowEnabled } = require("./tenantLoader");
+const { writeBridgeData: writeCallSessionBridgeData } = require("./lib/callSessions");
 
 // ─── Structured logging ───────────────────────────────────────────────────────
 // Output JSON so Cloud Logging ingests as jsonPayload (queryable by field).
@@ -618,6 +619,23 @@ wss.on("connection", async (phoneWs, req) => {
     if (!transferFired) {
       try { phoneWs.close(); } catch (_) {}
     }
+
+    // Phase B.2: append bridge-side data to call_sessions/<call_control_id>.
+    // Fire-and-forget — must not block the post-call webhook below.
+    writeCallSessionBridgeData({
+      callControlId,
+      traceId: trace_id,
+      transcript: transcripts,
+      turnCountUser,
+      turnCountAssistant,
+      durationMs,
+      voice,
+      realtimeModel,
+      visitedModes,
+      currentMode,
+      workflowEnabled,
+      transferFired,
+    });
 
     // --- Post-call webhook ---
     const webhookUrl = tenantConfig?.webhook?.post_call_url;

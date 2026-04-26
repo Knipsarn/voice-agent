@@ -12,6 +12,7 @@ RUN npm install --omit=dev
 COPY apps/voice-bridge/index.js ./
 COPY apps/voice-bridge/tenantLoader.js ./
 COPY apps/voice-bridge/providers ./providers
+COPY apps/voice-bridge/lib ./lib
 
 # Bake tenant configs and prompt assets into image for Phase 1.
 # Phase 2: replace with Firestore/Cloud Storage lookup and remove these COPYs.
