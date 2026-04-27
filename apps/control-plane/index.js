@@ -24,6 +24,7 @@ const tenantsRouter = require("./routes/tenants");
 const logsRouter = require("./routes/logs");
 const numbersRouter = require("./routes/numbers");
 const callsRouter = require("./routes/calls");
+const settingsRouter = require("./routes/settings");
 
 const app = express();
 app.use(express.json());
@@ -55,6 +56,7 @@ app.use("/tenants", tenantsRouter);
 app.use("/logs", logsRouter);
 app.use("/numbers", numbersRouter);
 app.use("/calls", callsRouter);
+app.use("/settings", settingsRouter);
 
 // ── 404 ──────────────────────────────────────────────────────────────────────
 app.use((req, res) => {

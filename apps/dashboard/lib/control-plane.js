@@ -37,3 +37,44 @@ export async function getCall(callControlId) {
 export async function listTenants() {
   return cpGet("/tenants");
 }
+
+export async function getTenant(tenantId) {
+  return cpGet(`/tenants/${encodeURIComponent(tenantId)}`);
+}
+
+export async function listNumbersForTenant(tenantId) {
+  return cpGet(`/numbers?tenant=${encodeURIComponent(tenantId)}`);
+}
+
+export async function getSettings(tenantId) {
+  return cpGet(`/settings/${encodeURIComponent(tenantId)}`);
+}
+
+async function cpJson(method, path, body) {
+  const headers = { "Content-Type": "application/json" };
+  if (API_KEY) headers.Authorization = `Bearer ${API_KEY}`;
+  const res = await fetch(`${BASE_URL}${path}`, {
+    method,
+    headers,
+    body: body ? JSON.stringify(body) : undefined,
+    cache: "no-store",
+  });
+  const text = await res.text();
+  let data;
+  try { data = JSON.parse(text); } catch { data = { raw: text }; }
+  if (!res.ok) {
+    const err = new Error(`CP ${method} ${path} → ${res.status}`);
+    err.status = res.status;
+    err.body = data;
+    throw err;
+  }
+  return data;
+}
+
+export async function saveSettings(tenantId, partial) {
+  return cpJson("POST", `/settings/${encodeURIComponent(tenantId)}`, partial);
+}
+
+export async function postFeedback(callControlId, { rating, note, by }) {
+  return cpJson("POST", `/calls/${encodeURIComponent(callControlId)}/feedback`, { rating, note, by });
+}

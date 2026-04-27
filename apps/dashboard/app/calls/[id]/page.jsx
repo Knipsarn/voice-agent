@@ -7,6 +7,7 @@ import { userScope } from "@/lib/tenant-map";
 import { getCall } from "@/lib/control-plane";
 import { priceForCall, marginForCall } from "@/lib/pricing";
 import { TopBar } from "../../components/TopBar";
+import { FeedbackPanel } from "../../components/FeedbackPanel";
 
 function formatTime(ts) {
   if (!ts) return "—";
@@ -122,6 +123,13 @@ export default async function CallDetail({ params }) {
             )}
           </div>
         </section>
+
+        {/* Feedback */}
+        <FeedbackPanel
+          callControlId={call.call_control_id}
+          initialFeedback={call.feedback}
+          currentEmail={session.user.email}
+        />
 
         {/* Transcript */}
         <section className="bg-white rounded-xl border border-gray-200 p-6">

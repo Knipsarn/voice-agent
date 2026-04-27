@@ -35,10 +35,12 @@ function validE164(s) {
   return typeof s === "string" && E164.test(s);
 }
 
-// ── GET /numbers ─────────────────────────────────────────────────────────────
+// ── GET /numbers[?tenant=<id>] ───────────────────────────────────────────────
 router.get("/", async (req, res) => {
   try {
-    const snap = await getDb().collection(COLLECTION).orderBy("assigned_at", "desc").get();
+    let q = getDb().collection(COLLECTION);
+    if (req.query.tenant) q = q.where("tenant_id", "==", req.query.tenant);
+    const snap = await q.get();
     const numbers = snap.docs.map((d) => ({ e164: d.id, ...d.data() }));
     res.json({ count: numbers.length, numbers });
   } catch (err) {

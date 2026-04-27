@@ -17,7 +17,7 @@
 const express = require("express");
 const router = express.Router();
 
-const { Firestore } = require("@google-cloud/firestore");
+const { Firestore, FieldValue } = require("@google-cloud/firestore");
 
 let db = null;
 function getDb() {
@@ -94,6 +94,34 @@ router.post("/:cci/reprocess", async (req, res) => {
     let body;
     try { body = JSON.parse(text); } catch { body = { raw: text }; }
     res.status(r.status).json(body);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ── POST /calls/:cci/feedback ────────────────────────────────────────────────
+// Records customer or operator feedback on a call. Stored under
+// call_sessions/<cci>.feedback. Per the brief §16, feedback is captured but
+// does NOT directly mutate prompts — that flows through the operator review
+// process.
+router.post("/:cci/feedback", async (req, res) => {
+  try {
+    const { rating, note, by } = req.body || {};
+    const ALLOWED_RATINGS = ["good", "bad", "needs_followup", "handled", "not_relevant", null];
+    if (!ALLOWED_RATINGS.includes(rating)) {
+      return res.status(400).json({ error: `rating must be one of: ${ALLOWED_RATINGS.filter(Boolean).join(", ")}` });
+    }
+    const update = {
+      feedback: {
+        rating,
+        note: note || null,
+        by: by || null,
+        at: FieldValue.serverTimestamp(),
+      },
+    };
+    await getDb().collection("call_sessions").doc(req.params.cci).set(update, { merge: true });
+    const snap = await getDb().collection("call_sessions").doc(req.params.cci).get();
+    res.json({ call_control_id: req.params.cci, feedback: snap.data().feedback });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
