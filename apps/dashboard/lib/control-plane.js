@@ -102,3 +102,17 @@ export async function listFortnoxCustomers() {
 export async function createFortnoxCustomer(data) {
   return cpJson("POST", "/billing/customers", data);
 }
+
+export async function listSuggestions(tenantId, { limit = 50 } = {}) {
+  return cpGet(`/suggestions/${encodeURIComponent(tenantId)}?limit=${limit}`);
+}
+
+export async function createSuggestion(tenantId, { text, submitted_by, call_context }) {
+  return cpJson("POST", `/suggestions/${encodeURIComponent(tenantId)}`, {
+    text, submitted_by, call_context,
+  });
+}
+
+export async function updateSuggestion(tenantId, id, partial) {
+  return cpJson("POST", `/suggestions/${encodeURIComponent(tenantId)}/${encodeURIComponent(id)}`, partial);
+}

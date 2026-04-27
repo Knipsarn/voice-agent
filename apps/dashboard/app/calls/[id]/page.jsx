@@ -8,6 +8,7 @@ import { getCall } from "@/lib/control-plane";
 import { priceForCall, marginForCall } from "@/lib/pricing";
 import { TopBar } from "../../components/TopBar";
 import { FeedbackPanel } from "../../components/FeedbackPanel";
+import { CallSuggestButton } from "../../components/CallSuggestButton";
 
 function formatTime(ts) {
   if (!ts) return "—";
@@ -18,7 +19,7 @@ function formatTime(ts) {
 function formatDuration(ms) {
   if (!ms) return "—";
   const sec = Math.round(ms / 1000);
-  return `${Math.floor(sec / 60)}m ${sec % 60}s (${sec}s)`;
+  return `${Math.floor(sec / 60)}m ${sec % 60}s`;
 }
 
 export default async function CallDetail({ params }) {
@@ -32,23 +33,21 @@ export default async function CallDetail({ params }) {
     call = await getCall(id);
   } catch (err) {
     return (
-      <main className="min-h-screen bg-paper">
-        <TopBar email={session.user.email} admin={scope.admin} />
-        <div className="max-w-3xl mx-auto px-6 py-16 text-center text-gray-500">
-          Call not found or access denied.
+      <main className="min-h-screen">
+        <TopBar email={session.user.email} admin={scope.admin} tenantId={scope.tenantId} />
+        <div className="max-w-3xl mx-auto px-6 py-24 text-center">
+          <div className="inline-block w-16 h-16 rounded-2xl bg-paper border border-line flex items-center justify-center text-3xl mb-3">🔍</div>
+          <h1 className="text-2xl font-semibold text-ink">Samtalet hittades inte</h1>
         </div>
       </main>
     );
   }
 
-  // Tenant scoping: customers can only see their own tenant's calls
   if (!scope.admin && call.tenant_id !== scope.tenantId) {
     return (
-      <main className="min-h-screen bg-paper">
+      <main className="min-h-screen">
         <TopBar email={session.user.email} admin={false} />
-        <div className="max-w-3xl mx-auto px-6 py-16 text-center text-gray-500">
-          Access denied.
-        </div>
+        <div className="max-w-3xl mx-auto px-6 py-24 text-center text-muted">Ingen åtkomst.</div>
       </main>
     );
   }
@@ -58,115 +57,139 @@ export default async function CallDetail({ params }) {
   const price = priceForCall(call.duration_ms);
   const cost = call.costs?.cost_total_sek || 0;
   const margin = marginForCall(call.duration_ms, cost);
+  const tenantId = call.tenant_id;
+
+  const callContext = {
+    call_control_id: call.call_control_id,
+    from_number: call.from_number,
+    initiated_at: call.initiated_at?._seconds
+      ? new Date(call.initiated_at._seconds * 1000).toISOString()
+      : null,
+    summary: summary?.summary?.slice(0, 200) || null,
+  };
 
   return (
-    <main className="min-h-screen bg-paper">
-      <TopBar email={session.user.email} admin={scope.admin} />
+    <main className="min-h-screen">
+      <TopBar email={session.user.email} admin={scope.admin} tenantId={tenantId} />
 
       <div className="max-w-4xl mx-auto px-6 py-8 space-y-6">
+        {/* Header */}
         <div>
-          <Link href="/calls" className="text-sm text-gray-500 hover:text-ink">← All calls</Link>
-          <h1 className="text-2xl font-semibold text-ink mt-2">Call detail</h1>
-          <p className="text-sm text-gray-500 mt-1">
-            {call.tenant_id} · from {call.from_number || "?"} → {call.to_number || "?"} · {formatTime(call.initiated_at)}
-          </p>
+          <Link href="/calls" className="text-sm text-muted hover:text-ink inline-flex items-center gap-1">
+            ← Alla samtal
+          </Link>
+          <div className="mt-3 flex flex-wrap items-end justify-between gap-3">
+            <div>
+              <h1 className="text-3xl font-semibold text-ink tracking-tight">
+                {call.from_number || "Okänt nummer"}
+              </h1>
+              <p className="text-sm text-muted mt-1">
+                {formatTime(call.initiated_at)} · {formatDuration(call.duration_ms)}
+                {scope.admin && ` · ${tenantId}`}
+              </p>
+            </div>
+            {summary?.urgency === "urgent" && (
+              <span className="bg-danger/10 text-danger text-xs font-semibold uppercase tracking-wide px-3 py-1.5 rounded-full">
+                Brådskande
+              </span>
+            )}
+          </div>
         </div>
 
         {/* Summary card */}
-        <section className="bg-white rounded-xl border border-gray-200 p-6">
-          <div className="flex items-center justify-between mb-3">
-            <h2 className="text-lg font-medium text-ink">Summary</h2>
-            {summary?.urgency === "urgent" && (
-              <span className="bg-red-100 text-red-700 text-xs font-medium px-2 py-0.5 rounded">Urgent</span>
-            )}
-          </div>
+        <section className="bg-gradient-hero rounded-3xl border border-accent/10 p-6">
+          <h2 className="text-base font-semibold text-ink mb-3 flex items-center gap-2">
+            <span>📋</span> Sammanfattning
+          </h2>
           {summary ? (
-            <div className="space-y-3">
-              <p className="text-gray-800 leading-relaxed">{summary.summary}</p>
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-4 pt-3 border-t border-gray-100">
-                <KV label="Intent" value={summary.intent} />
-                <KV label="Outcome" value={summary.outcome} />
-                <KV label="Urgency" value={summary.urgency} />
-                <KV label="Follow-up" value={summary.requires_followup ? "Required" : "Not needed"} />
+            <div className="space-y-4">
+              <p className="text-ink leading-relaxed">{summary.summary}</p>
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4 pt-4 border-t border-accent/10">
+                <KV label="Avsikt" value={summary.intent} />
+                <KV label="Resultat" value={summary.outcome} />
+                <KV label="Brådska" value={summary.urgency} />
+                <KV label="Uppföljning" value={summary.requires_followup ? "Behövs" : "Inte nödvändig"} />
               </div>
               {summary.suggested_action && (
-                <div className="bg-amber-50 border border-amber-200 rounded p-3 text-sm">
-                  <div className="text-xs uppercase font-medium text-amber-700 tracking-wider mb-1">Suggested action</div>
-                  <div className="text-amber-900">{summary.suggested_action}</div>
+                <div className="bg-white/60 rounded-2xl p-4 mt-2">
+                  <div className="text-[10px] uppercase font-semibold tracking-wider text-accent mb-1">Föreslagen åtgärd</div>
+                  <div className="text-sm text-ink">{summary.suggested_action}</div>
                 </div>
               )}
             </div>
           ) : (
-            <p className="text-gray-500 text-sm">Summary still pending — runs every minute via the post-processor.</p>
+            <p className="text-sm text-muted">Sammanfattning kommer strax — bearbetas just nu.</p>
           )}
         </section>
 
-        {/* Lifecycle + pricing card */}
-        <section className="bg-white rounded-xl border border-gray-200 p-6">
-          <h2 className="text-lg font-medium text-ink mb-4">Call details</h2>
-          <div className="grid grid-cols-2 md:grid-cols-3 gap-y-3 text-sm">
-            <KV label="Duration" value={formatDuration(call.duration_ms)} />
-            <KV label="Status" value={call.status} />
-            <KV label="Hangup" value={`${call.hangup_cause || "?"} (${call.hangup_source || "?"})`} />
-            <KV label="Voice" value={call.voice} />
-            <KV label="Model" value={call.realtime_model} />
-            <KV label="Workflow" value={call.workflow_enabled ? (call.visited_modes?.join(" → ") || "—") : "no workflow"} />
-            <KV label="Turns (user / agent)" value={`${call.turn_count_user || 0} / ${call.turn_count_assistant || 0}`} />
-            <KV label="Price (SEK)" value={price.toFixed(2)} accent />
-            {scope.admin && <KV label="Cost (SEK)" value={cost.toFixed(2)} muted />}
-            {scope.admin && (
-              <KV
-                label="Margin (SEK)"
-                value={margin.toFixed(2)}
-                cls={margin >= 0 ? "text-green-700 font-medium" : "text-red-700 font-medium"}
-              />
-            )}
-          </div>
-        </section>
-
-        {/* Feedback */}
+        {/* Feedback + suggest button */}
         <FeedbackPanel
           callControlId={call.call_control_id}
           initialFeedback={call.feedback}
           currentEmail={session.user.email}
         />
 
+        <div className="bg-surface rounded-2xl border border-line p-6 shadow-card">
+          <div className="flex items-start justify-between gap-4">
+            <div>
+              <h2 className="text-base font-semibold text-ink">Något agenten borde gjort annorlunda?</h2>
+              <p className="text-sm text-muted mt-1">Skicka in ett förbättringsförslag kopplat till det här samtalet.</p>
+            </div>
+            <CallSuggestButton tenantId={tenantId} callContext={callContext} />
+          </div>
+        </div>
+
         {/* Transcript */}
-        <section className="bg-white rounded-xl border border-gray-200 p-6">
-          <h2 className="text-lg font-medium text-ink mb-4">Transcript</h2>
+        <section className="bg-surface rounded-2xl border border-line p-6 shadow-card">
+          <h2 className="text-base font-semibold text-ink mb-4 flex items-center gap-2">
+            <span>💬</span> Transkript
+          </h2>
           {transcript.length === 0 ? (
-            <p className="text-gray-500 text-sm">No transcript captured.</p>
+            <p className="text-sm text-muted">Inget transkript fångat.</p>
           ) : (
             <ol className="space-y-3">
               {transcript.map((t, i) => (
                 <li key={i} className="flex gap-3 text-sm">
-                  <span className="mono text-gray-400 w-12 shrink-0 text-right pt-0.5">
+                  <span className="mono text-subtle w-12 shrink-0 text-right pt-0.5 text-xs">
                     {t.time_in_call_secs != null ? `${t.time_in_call_secs}s` : ""}
                   </span>
-                  <span className={`uppercase text-xs font-medium w-16 shrink-0 pt-0.5 ${t.role === "agent" ? "text-accent" : "text-gray-700"}`}>
-                    {t.role || "?"}
+                  <span className={`uppercase text-[10px] font-semibold tracking-wider w-16 shrink-0 pt-1 ${t.role === "agent" ? "text-accent" : "text-muted"}`}>
+                    {t.role === "agent" ? "Agent" : "Kund"}
                   </span>
-                  <span className="text-gray-800">{t.message || t.text || ""}</span>
+                  <span className="text-ink leading-relaxed">{t.message || t.text || ""}</span>
                 </li>
               ))}
             </ol>
           )}
         </section>
 
-        {scope.admin && call.costs && (
-          <section className="bg-white rounded-xl border border-gray-200 p-6">
-            <h2 className="text-lg font-medium text-ink mb-4">Cost breakdown (admin)</h2>
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-y-3 text-sm">
-              <KV label="Telnyx" value={`${call.costs.cost_telnyx_sek?.toFixed(4)} SEK`} />
-              <KV label="OpenAI Realtime" value={`${call.costs.cost_openai_realtime_sek?.toFixed(4)} SEK`} />
-              <KV label="Summarizer" value={`${call.costs.cost_summarizer_sek?.toFixed(4)} SEK`} />
-              <KV label="Infra" value={`${call.costs.cost_infra_sek?.toFixed(4)} SEK`} />
-              <KV label="Total cost" value={`${call.costs.cost_total_sek?.toFixed(4)} SEK`} muted />
-              <KV label="Billed minutes" value={call.costs.cost_minutes} />
+        {/* Admin-only: pricing + cost details */}
+        {scope.admin && (
+          <section className="bg-surface rounded-2xl border border-line p-6 shadow-card">
+            <h2 className="text-base font-semibold text-ink mb-4">Admin · Cost & technical</h2>
+            <div className="grid grid-cols-2 md:grid-cols-3 gap-y-3 text-sm mb-4">
+              <KV label="Status" value={call.status} />
+              <KV label="Hangup" value={`${call.hangup_cause || "?"} (${call.hangup_source || "?"})`} />
+              <KV label="Voice" value={call.voice} />
+              <KV label="Model" value={call.realtime_model} />
+              <KV label="Workflow" value={call.workflow_enabled ? (call.visited_modes?.join(" → ") || "—") : "no workflow"} />
+              <KV label="Turns (user/agent)" value={`${call.turn_count_user || 0} / ${call.turn_count_assistant || 0}`} />
+              <KV label="Price (SEK)" value={price.toFixed(2)} accent />
+              <KV label="Cost (SEK)" value={cost.toFixed(2)} muted />
+              <KV
+                label="Margin (SEK)"
+                value={margin.toFixed(2)}
+                cls={margin >= 0 ? "text-emerald-700 font-medium" : "text-danger font-medium"}
+              />
             </div>
-            <p className="text-xs text-gray-400 mt-4">
-              Cost rates are env-configurable placeholders until real provider invoices are loaded.
-            </p>
+            {call.costs && (
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-y-3 text-sm pt-4 border-t border-line">
+                <KV label="Telnyx" value={`${call.costs.cost_telnyx_sek?.toFixed(4)} SEK`} />
+                <KV label="OpenAI Realtime" value={`${call.costs.cost_openai_realtime_sek?.toFixed(4)} SEK`} />
+                <KV label="Summarizer" value={`${call.costs.cost_summarizer_sek?.toFixed(4)} SEK`} />
+                <KV label="Infra" value={`${call.costs.cost_infra_sek?.toFixed(4)} SEK`} />
+              </div>
+            )}
           </section>
         )}
       </div>
@@ -177,8 +200,8 @@ export default async function CallDetail({ params }) {
 function KV({ label, value, accent, muted, cls }) {
   return (
     <div>
-      <div className="text-xs uppercase tracking-wider text-gray-400">{label}</div>
-      <div className={`mono ${accent ? "text-accent font-medium" : muted ? "text-gray-500" : "text-ink"} ${cls || ""}`}>
+      <div className="text-[10px] uppercase tracking-wider text-subtle font-semibold">{label}</div>
+      <div className={`mono text-sm mt-0.5 ${accent ? "text-accent font-semibold" : muted ? "text-muted" : "text-ink"} ${cls || ""}`}>
         {value ?? "—"}
       </div>
     </div>

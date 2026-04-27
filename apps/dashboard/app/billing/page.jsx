@@ -36,7 +36,7 @@ export default async function BillingPage({ searchParams }) {
   if (!scope.admin && !scope.tenantId) {
     return (
       <main className="min-h-screen bg-paper">
-        <TopBar email={session.user.email} admin={false} />
+        <TopBar email={session.user.email} admin={false} tenantId={null} />
         <div className="max-w-3xl mx-auto px-6 py-16 text-center text-gray-500">No access.</div>
       </main>
     );
@@ -47,7 +47,7 @@ export default async function BillingPage({ searchParams }) {
     const allTenants = await listTenants().catch(() => ({ tenants: [] }));
     return (
       <main className="min-h-screen bg-paper">
-        <TopBar email={session.user.email} admin={true} />
+        <TopBar email={session.user.email} admin={true} tenantId={null} />
         <div className="max-w-3xl mx-auto px-6 py-16 space-y-4">
           <h1 className="text-2xl font-semibold text-ink">Pick a tenant</h1>
           <ul className="space-y-2">
@@ -90,7 +90,7 @@ export default async function BillingPage({ searchParams }) {
 
   return (
     <main className="min-h-screen bg-paper">
-      <TopBar email={session.user.email} admin={scope.admin} />
+      <TopBar email={session.user.email} admin={scope.admin} tenantId={tenantId} />
       <div className="max-w-4xl mx-auto px-6 py-8 space-y-6">
         <div>
           <h1 className="text-3xl font-semibold text-ink">Billing — {monthLabel}</h1>

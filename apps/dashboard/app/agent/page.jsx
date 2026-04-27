@@ -19,7 +19,7 @@ export default async function AgentPage({ searchParams }) {
   if (!scope.admin && !scope.tenantId) {
     return (
       <main className="min-h-screen bg-paper">
-        <TopBar email={session.user.email} admin={false} />
+        <TopBar email={session.user.email} admin={false} tenantId={null} />
         <div className="max-w-3xl mx-auto px-6 py-16 text-center text-gray-500">
           No access. Contact support.
         </div>
@@ -34,7 +34,7 @@ export default async function AgentPage({ searchParams }) {
     const allTenants = await listTenants().catch(() => ({ tenants: [] }));
     return (
       <main className="min-h-screen bg-paper">
-        <TopBar email={session.user.email} admin={true} />
+        <TopBar email={session.user.email} admin={true} tenantId={tenantId} />
         <div className="max-w-3xl mx-auto px-6 py-16 space-y-4">
           <h1 className="text-2xl font-semibold text-ink">Pick a tenant</h1>
           <ul className="space-y-2">
@@ -61,7 +61,7 @@ export default async function AgentPage({ searchParams }) {
   } catch (err) {
     return (
       <main className="min-h-screen bg-paper">
-        <TopBar email={session.user.email} admin={scope.admin} />
+        <TopBar email={session.user.email} admin={scope.admin} tenantId={tenantId} />
         <div className="max-w-3xl mx-auto px-6 py-16 text-center text-gray-500">
           Could not load agent: {err.message}
         </div>
@@ -77,7 +77,7 @@ export default async function AgentPage({ searchParams }) {
 
   return (
     <main className="min-h-screen bg-paper">
-      <TopBar email={session.user.email} admin={scope.admin} />
+      <TopBar email={session.user.email} admin={scope.admin} tenantId={tenantId} />
 
       <div className="max-w-5xl mx-auto px-6 py-8 space-y-6">
         <div>
