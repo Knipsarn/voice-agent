@@ -52,6 +52,7 @@ Routing: which path a call takes depends on which Telnyx Call Control App the nu
 | `control-plane-service` | Cloud Run, `europe-west1` | Operator API: tenant CRUD, diff, publish, logs, numbers, calls |
 | `telephony-service` | Cloud Run, `europe-west1` | Telnyx webhook gateway. Routes inbound calls to bridge by destination number. Writes call_sessions lifecycle (Phase B.1). |
 | `post-processor-service` | Cloud Run, `europe-west1` | Reads completed `call_sessions`, generates dentist-chart-style summary via cheap LLM, writes back with cost tracking. Triggered by Cloud Scheduler every minute. |
+| `dashboard-service` | Cloud Run, `europe-west1` | Next.js + NextAuth (Google sign-in). Customer view (own tenant only) + admin view (cross-tenant + costs/margin). URLs: `https://dashboard-service-360579353014.europe-west1.run.app`. |
 
 ### Data stores
 | Store | Purpose |
@@ -414,10 +415,10 @@ Anchored to the founder's developer brief (`Autonomous Ai Telephony Platform Dev
 - ✅ **Phase B.2** — voice-bridge appends transcript, turn counts, visited_modes at end of call (awaited write so Cloud Run CPU throttling doesn't kill it)
 - ✅ **Phase B.3** — `post-processor-service` summarizes completed calls in dentist-chart voice via gpt-4o-mini; tracks per-call cost in SEK
 - ✅ **Phase B.4** — control-plane `/calls` endpoints + ops scripts (`calls-list`, `call-show`, `call-reprocess`)
+- ✅ **Phase F** — Customer + admin dashboard live (`dashboard-service`). NextAuth Google sign-in, email→tenant map, customer view + admin view with costs/margin. Awaiting OAuth client setup before sign-in works.
 - ⏳ Phase C — SMS (new messaging profile, attach to numbers, `POST /v1/sms` endpoint)
 - ⏳ Phase D — Outbound voice (new outbound voice profile with `SE` whitelisted + spend cap, `POST /v1/calls/outbound`)
 - ⏳ Phase E — Number lifecycle API (search/buy/assign/release)
-- ⏳ Phase F — Customer + admin dashboards (Next.js + Firebase Auth, on top of `call_sessions`)
 - ⏳ Phase G — Email handoff via Postmark (per-tenant configurable summary email)
 
 ### Other immediate items (not blocked by telephony cutover)
