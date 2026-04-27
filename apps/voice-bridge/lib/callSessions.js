@@ -42,6 +42,7 @@ async function writeBridgeData({
   currentMode,
   workflowEnabled,
   transferFired,
+  realtimeUsage,
 }) {
   if (!callControlId) {
     log("call_session_bridge_skip", { trace_id: traceId, reason: "no_call_control_id" });
@@ -61,6 +62,7 @@ async function writeBridgeData({
     visited_modes: visitedModes ? Array.from(visitedModes) : [],
     final_mode: currentMode || null,
     transfer_fired: Boolean(transferFired),
+    realtime_usage: realtimeUsage || null,
   };
 
   try {

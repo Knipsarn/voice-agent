@@ -55,6 +55,7 @@ async function processOne(callControlId, { force = false } = {}) {
   const costs = calculateCallCost({
     direction: data.direction || "inbound",
     durationMs: data.duration_ms || 0,
+    realtimeUsage: data.realtime_usage || null,
   });
 
   await ref.set(

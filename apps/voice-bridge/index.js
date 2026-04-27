@@ -87,6 +87,40 @@ wss.on("connection", async (phoneWs, req) => {
   let turnCountAssistant = 0;
   const transcripts = [];
 
+  // OpenAI Realtime usage accumulator — summed across all response.done events
+  // in this call. Used by the post-processor to compute exact cost per call
+  // instead of the per-minute estimate.
+  const realtimeUsage = {
+    responses: 0,
+    total_tokens: 0,
+    input_tokens: 0,
+    output_tokens: 0,
+    input_text_tokens: 0,
+    input_audio_tokens: 0,
+    input_cached_tokens: 0,
+    input_cached_text_tokens: 0,
+    input_cached_audio_tokens: 0,
+    output_text_tokens: 0,
+    output_audio_tokens: 0,
+  };
+  function addRealtimeUsage(usage) {
+    if (!usage) return;
+    realtimeUsage.responses += 1;
+    realtimeUsage.total_tokens += usage.total_tokens || 0;
+    realtimeUsage.input_tokens += usage.input_tokens || 0;
+    realtimeUsage.output_tokens += usage.output_tokens || 0;
+    const inD = usage.input_token_details || {};
+    realtimeUsage.input_text_tokens += inD.text_tokens || 0;
+    realtimeUsage.input_audio_tokens += inD.audio_tokens || 0;
+    realtimeUsage.input_cached_tokens += inD.cached_tokens || 0;
+    const cD = inD.cached_tokens_details || {};
+    realtimeUsage.input_cached_text_tokens += cD.text_tokens || 0;
+    realtimeUsage.input_cached_audio_tokens += cD.audio_tokens || 0;
+    const outD = usage.output_token_details || {};
+    realtimeUsage.output_text_tokens += outD.text_tokens || 0;
+    realtimeUsage.output_audio_tokens += outD.audio_tokens || 0;
+  }
+
   // --- Provider detection ---
   const pathname = url.parse(req.url).pathname || "/";
   const isElks = pathname.startsWith("/elks");
@@ -484,6 +518,7 @@ wss.on("connection", async (phoneWs, req) => {
 
         case "response.done":
           turnCountAssistant++;
+          addRealtimeUsage(msg.response?.usage);
           log("response_done", { trace_id, tenant_id: tenantId || null, turn_assistant: turnCountAssistant });
           // Fire phone transfer after agent finishes speaking in the NEW mode.
           // awaitingTransferResponse = true means this response.done is for the OLD mode — skip.
@@ -640,6 +675,7 @@ wss.on("connection", async (phoneWs, req) => {
         currentMode,
         workflowEnabled,
         transferFired,
+        realtimeUsage,
       });
     } catch (err) {
       logError("call_session_bridge_unhandled", { trace_id, error: err.message });
