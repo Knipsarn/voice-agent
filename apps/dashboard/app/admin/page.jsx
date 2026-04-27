@@ -1,12 +1,17 @@
 import { getServerSession } from "next-auth";
 import { redirect } from "next/navigation";
+import Link from "next/link";
 
 import { authOptions } from "@/lib/auth-config";
 import { userScope } from "@/lib/tenant-map";
 import { listCalls, listTenants } from "@/lib/control-plane";
-import { priceForCall, RATES } from "@/lib/pricing";
-import { TopBar } from "../components/TopBar";
-import { AdminSuggestionsInbox } from "../components/AdminSuggestionsInbox";
+import { priceForCall } from "@/lib/pricing";
+import { AppShell } from "../components/AppShell";
+import { Icon } from "../components/Icon";
+
+function startOfMonth(d = new Date()) {
+  return new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), 1, 0, 0, 0));
+}
 
 export default async function AdminPage() {
   const session = await getServerSession(authOptions);
@@ -14,14 +19,16 @@ export default async function AdminPage() {
   const scope = userScope(session.user.email);
   if (!scope.admin) redirect("/");
 
-  const [callsRes, tenantsRes] = await Promise.all([
-    listCalls({ limit: 200, includeCosts: true }),
-    listTenants().catch(() => ({ count: 0, tenants: [] })),
+  const monthStart = startOfMonth();
+  const [tenantsRes, callsRes] = await Promise.all([
+    listTenants().catch(() => ({ tenants: [] })),
+    listCalls({ since: monthStart.toISOString(), limit: 500, includeCosts: true }).catch(() => ({ calls: [] })),
   ]);
 
-  const calls = callsRes.calls || [];
   const tenants = tenantsRes.tenants || [];
+  const calls = callsRes.calls || [];
 
+  // Roll up per tenant
   const byTenant = new Map();
   for (const c of calls) {
     const t = c.tenant_id || "(unknown)";
@@ -34,98 +41,91 @@ export default async function AdminPage() {
     agg.cost += c.costs?.cost_total_sek || 0;
   }
 
-  const totalCalls = calls.length;
-  const totalMinutes = calls.reduce((s, c) => s + (c.duration_ms || 0) / 60000, 0);
-  const totalPrice = calls.reduce((s, c) => s + priceForCall(c.duration_ms), 0);
-  const totalCost = calls.reduce((s, c) => s + (c.costs?.cost_total_sek || 0), 0);
-  const totalMargin = totalPrice - totalCost;
+  // Combine tenant config + monthly stats
+  const customers = tenants.map((t) => {
+    const stats = byTenant.get(t.tenant_id) || { count: 0, minutes: 0, price: 0, cost: 0 };
+    const margin = stats.price - stats.cost;
+    return { ...t, stats, margin };
+  });
 
   return (
-    <main className="min-h-screen">
-      <TopBar email={session.user.email} admin={true} />
-
-      <div className="max-w-6xl mx-auto px-6 py-10 space-y-8">
-        <div>
-          <h1 className="text-3xl font-semibold text-ink tracking-tight">Admin overview</h1>
-          <p className="text-sm text-muted mt-1">
-            Last {totalCalls} calls across {byTenant.size} tenants · {RATES.per_minute_sek} SEK/min + 1000 kr static
+    <AppShell email={session.user.email} admin={true}>
+      <div className="max-w-6xl mx-auto px-6 md:px-10 py-8 md:py-12">
+        <header className="mb-8">
+          <p className="text-xs uppercase tracking-widest text-muted font-semibold">
+            {new Date().toLocaleDateString("en-GB", { month: "long", year: "numeric" })}
           </p>
-        </div>
+          <h1 className="text-4xl font-semibold text-ink tracking-tightest mt-2">Customers</h1>
+          <p className="text-sm text-muted mt-1">{customers.length} active · {calls.length} calls this month</p>
+        </header>
 
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-          <Card label="Calls" value={totalCalls} />
-          <Card label="Minutes" value={totalMinutes.toFixed(1)} />
-          <Card label="Revenue" value={`${totalPrice.toFixed(0)} SEK`} accent />
-          <Card label="Margin" value={`${totalMargin.toFixed(0)} SEK`} positive={totalMargin >= 0} />
-        </div>
-
-        {/* By tenant */}
-        <section className="bg-surface rounded-2xl border border-line overflow-hidden shadow-card">
-          <div className="px-6 py-4 border-b border-line">
-            <h2 className="text-base font-semibold text-ink">By tenant</h2>
-          </div>
-          <table className="w-full text-sm">
-            <thead className="bg-paper border-b border-line">
-              <tr className="text-left text-muted uppercase text-[10px] tracking-wider font-semibold">
-                <th className="px-6 py-3">Tenant</th>
-                <th className="px-6 py-3 text-right">Calls</th>
-                <th className="px-6 py-3 text-right">Minutes</th>
-                <th className="px-6 py-3 text-right">Revenue</th>
-                <th className="px-6 py-3 text-right">Cost</th>
-                <th className="px-6 py-3 text-right">Margin</th>
-                <th className="px-6 py-3 text-right">%</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-line">
-              {[...byTenant.entries()].map(([tenant, agg]) => {
-                const margin = agg.price - agg.cost;
-                const marginPct = agg.price > 0 ? (margin / agg.price) * 100 : 0;
-                return (
-                  <tr key={tenant} className="hover:bg-paper transition-colors">
-                    <td className="px-6 py-3">
-                      <a href={`/calls?tenant=${encodeURIComponent(tenant)}`} className="text-accent hover:text-accent-hover font-medium">{tenant}</a>
-                    </td>
-                    <td className="px-6 py-3 text-right mono">{agg.count}</td>
-                    <td className="px-6 py-3 text-right mono">{agg.minutes.toFixed(1)}</td>
-                    <td className="px-6 py-3 text-right mono">{agg.price.toFixed(0)}</td>
-                    <td className="px-6 py-3 text-right mono text-muted">{agg.cost.toFixed(0)}</td>
-                    <td className={`px-6 py-3 text-right mono ${margin >= 0 ? "text-emerald-700" : "text-danger"}`}>{margin.toFixed(0)}</td>
-                    <td className={`px-6 py-3 text-right mono ${marginPct >= 0 ? "text-emerald-700" : "text-danger"}`}>{marginPct.toFixed(0)}%</td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </section>
-
-        {/* Tenant suggestions inbox */}
-        <section className="bg-surface rounded-2xl border border-line p-6 shadow-card">
-          <div className="flex items-center justify-between mb-4">
-            <div>
-              <h2 className="text-base font-semibold text-ink flex items-center gap-2">
-                <span>✨</span> Förbättringsförslag från tenants
-              </h2>
-              <p className="text-xs text-muted mt-0.5">Kunder kan föreslå agentförbättringar via dashboarden — svaren visas för dem.</p>
+        {customers.length === 0 ? (
+          <div className="bg-surface border border-line rounded-lg p-12 text-center">
+            <div className="inline-flex items-center justify-center w-12 h-12 rounded-lg bg-line-soft text-subtle mb-3">
+              <Icon name="users" size={20} />
             </div>
+            <p className="text-sm text-muted">No customers yet.</p>
           </div>
-          <AdminSuggestionsInbox tenants={tenants} />
-        </section>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            {customers.map((c) => (
+              <CustomerCard key={c.tenant_id} customer={c} />
+            ))}
+          </div>
+        )}
       </div>
-    </main>
+    </AppShell>
   );
 }
 
-function Card({ label, value, accent, positive }) {
+function CustomerCard({ customer }) {
+  const { tenant_id, company_name, status, stats, margin } = customer;
+  const initial = (company_name || tenant_id)[0]?.toUpperCase();
+
   return (
-    <div className="bg-surface border border-line rounded-2xl p-5 shadow-card card-hover">
-      <div className="text-[10px] uppercase tracking-wider text-muted font-semibold">{label}</div>
-      <div className={`mono text-2xl font-semibold mt-2 ${
-        accent ? "bg-gradient-accent bg-clip-text text-transparent" :
-        positive === true ? "text-emerald-700" :
-        positive === false ? "text-danger" :
-        "text-ink"
-      }`}>
+    <Link
+      href={`/?tenant=${encodeURIComponent(tenant_id)}`}
+      className="block bg-surface border border-line rounded-lg p-5 card-hover"
+    >
+      <div className="flex items-start justify-between mb-4">
+        <div className="flex items-center gap-3">
+          <div className="w-10 h-10 rounded-lg bg-accent-soft flex items-center justify-center text-base font-semibold text-accent">
+            {initial}
+          </div>
+          <div>
+            <div className="font-semibold text-ink text-[15px] tracking-tight">{company_name || tenant_id}</div>
+            <div className="text-[11px] text-subtle mono">{tenant_id}</div>
+          </div>
+        </div>
+        {status && (
+          <span className={`text-[10px] uppercase tracking-wider font-semibold px-2 py-0.5 rounded ${
+            status === "active"
+              ? "bg-success/10 text-success"
+              : "bg-line-soft text-muted"
+          }`}>
+            {status}
+          </span>
+        )}
+      </div>
+
+      <div className="grid grid-cols-4 gap-3 pt-4 border-t border-line">
+        <Mini label="Calls" value={stats.count} />
+        <Mini label="Min" value={stats.minutes.toFixed(0)} />
+        <Mini label="Revenue" value={`${stats.price.toFixed(0)}`} suffix="kr" />
+        <Mini label="Margin" value={`${margin.toFixed(0)}`} suffix="kr" tone={margin >= 0 ? "success" : "danger"} />
+      </div>
+    </Link>
+  );
+}
+
+function Mini({ label, value, suffix, tone }) {
+  const valueCls = tone === "success" ? "text-success" : tone === "danger" ? "text-danger" : "text-ink";
+  return (
+    <div>
+      <div className="text-[10px] uppercase tracking-widest text-subtle font-semibold">{label}</div>
+      <div className={`text-sm font-semibold mt-1 tabular ${valueCls}`}>
         {value}
+        {suffix && <span className="text-subtle font-normal text-[11px] ml-0.5">{suffix}</span>}
       </div>
     </div>
   );

@@ -37,6 +37,8 @@ function publicView(doc) {
 }
 
 // ── GET /calls ───────────────────────────────────────────────────────────────
+// Strategy: query with as few index requirements as possible. Filter "since"
+// client-side after fetching. This avoids needing many composite indexes.
 router.get("/", async (req, res) => {
   try {
     const tenant = req.query.tenant;
@@ -48,19 +50,30 @@ router.get("/", async (req, res) => {
     let q = getDb().collection("call_sessions");
     if (tenant) q = q.where("tenant_id", "==", tenant);
     if (status) q = q.where("status", "==", status);
-    if (since) {
-      const sinceDate = new Date(since);
-      if (!Number.isNaN(sinceDate.getTime())) {
-        q = q.where("initiated_at", ">=", sinceDate);
-      }
-    }
-    q = q.orderBy("initiated_at", "desc").limit(limit);
+    // Single orderBy works without composite index when only one field is filtered
+    // by equality. Fetch a wider window so since-filter still returns enough rows.
+    const fetchLimit = since ? Math.min(limit * 4, 500) : limit;
+    q = q.orderBy("initiated_at", "desc").limit(fetchLimit);
 
     const snap = await q.get();
-    const calls = snap.docs.map((d) => {
+    let calls = snap.docs.map((d) => {
       const data = { call_control_id: d.id, ...d.data() };
       return includeCosts ? data : publicView(data);
     });
+
+    if (since) {
+      const sinceMs = new Date(since).getTime();
+      if (!Number.isNaN(sinceMs)) {
+        calls = calls.filter((c) => {
+          const t = c.initiated_at;
+          if (!t) return false;
+          const ms = t._seconds ? t._seconds * 1000 : (t.seconds ? t.seconds * 1000 : new Date(t).getTime());
+          return ms >= sinceMs;
+        });
+      }
+    }
+
+    calls = calls.slice(0, limit);
     res.json({ count: calls.length, calls });
   } catch (err) {
     res.status(500).json({ error: err.message });

@@ -4,21 +4,34 @@
 
 html, body { height: 100%; }
 body {
-  background: #f8fafc;
-  color: #0f172a;
+  background: #fcfcfd;
+  color: #0a0a0a;
   font-family: -apple-system, BlinkMacSystemFont, "Inter", "Segoe UI", Roboto, sans-serif;
   -webkit-font-smoothing: antialiased;
-  font-feature-settings: "cv11", "ss01";
+  text-rendering: optimizeLegibility;
+  font-feature-settings: "cv11", "ss01", "tnum" 1;
 }
 
 .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+.tabular { font-variant-numeric: tabular-nums; }
 
-/* Subtle scrollbar styling */
+/* Subtle scrollbar */
 ::-webkit-scrollbar { width: 10px; height: 10px; }
 ::-webkit-scrollbar-track { background: transparent; }
-::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 8px; border: 2px solid #f8fafc; }
-::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+::-webkit-scrollbar-thumb { background: #d4d4d8; border-radius: 8px; border: 2px solid #fcfcfd; }
+::-webkit-scrollbar-thumb:hover { background: #a1a1aa; }
 
 /* Card lift on hover */
-.card-hover { transition: box-shadow 0.2s, transform 0.2s; }
-.card-hover:hover { box-shadow: 0 4px 24px -8px rgba(15, 23, 42, 0.12); transform: translateY(-1px); }
+.card-hover { transition: all 0.15s ease; }
+.card-hover:hover { border-color: #d4d4d8; }
+
+/* Focus ring */
+.focus-ring:focus-visible { outline: none; box-shadow: 0 0 0 3px rgba(91, 91, 214, 0.18); }
+
+/* Grid texture for hero/empty sections */
+.bg-grid {
+  background-image:
+    linear-gradient(rgba(228, 228, 231, 0.4) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(228, 228, 231, 0.4) 1px, transparent 1px);
+  background-size: 32px 32px;
+}

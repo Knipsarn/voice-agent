@@ -33,28 +33,28 @@ export function InvoiceActionPanel({ tenantId, month, initialInvoice }) {
       <div className="flex items-center gap-3">
         <StatusBadge status={status} />
         {invoice?.fortnox_invoice_number && (
-          <span className="text-sm text-gray-600 mono">
+          <span className="text-sm text-muted mono">
             Invoice #{invoice.fortnox_invoice_number}
           </span>
         )}
         {invoice?.created_at && (
-          <span className="text-xs text-gray-400">
+          <span className="text-xs text-subtle">
             Created {formatTs(invoice.created_at)}
           </span>
         )}
         {invoice?.sent_at && (
-          <span className="text-xs text-gray-400">
+          <span className="text-xs text-subtle">
             · Sent {formatTs(invoice.sent_at)}
           </span>
         )}
       </div>
 
       {invoice?.error && (
-        <p className="text-xs text-red-600 bg-red-50 rounded p-2 font-mono">{invoice.error}</p>
+        <p className="text-xs text-danger bg-red-50 rounded p-2 font-mono">{invoice.error}</p>
       )}
 
       {error && (
-        <p className="text-xs text-red-600 bg-red-50 rounded p-2">{error}</p>
+        <p className="text-xs text-danger bg-red-50 rounded p-2">{error}</p>
       )}
 
       {/* Action buttons */}
@@ -63,7 +63,7 @@ export function InvoiceActionPanel({ tenantId, month, initialInvoice }) {
           <button
             onClick={() => callAction("create")}
             disabled={loading === "create"}
-            className="bg-ink text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-gray-800 disabled:opacity-50"
+            className="bg-ink text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-ink/85 disabled:opacity-50"
           >
             {loading === "create" ? "Creating…" : "Create invoice"}
           </button>
@@ -78,7 +78,7 @@ export function InvoiceActionPanel({ tenantId, month, initialInvoice }) {
           </button>
         )}
         {status === "sent" && (
-          <span className="text-sm text-green-700 font-medium">Invoice sent via Fortnox</span>
+          <span className="text-sm text-success font-medium">Invoice sent via Fortnox</span>
         )}
       </div>
     </div>
@@ -87,12 +87,12 @@ export function InvoiceActionPanel({ tenantId, month, initialInvoice }) {
 
 function StatusBadge({ status }) {
   const map = {
-    not_invoiced: ["bg-gray-100 text-gray-600", "Not invoiced"],
+    not_invoiced: ["bg-line-soft text-muted", "Not invoiced"],
     created: ["bg-blue-100 text-blue-700", "Created in Fortnox"],
-    sent: ["bg-green-100 text-green-700", "Sent"],
+    sent: ["bg-green-100 text-success", "Sent"],
     failed: ["bg-red-100 text-red-700", "Failed"],
   };
-  const [cls, label] = map[status] || ["bg-gray-100 text-gray-600", status];
+  const [cls, label] = map[status] || ["bg-line-soft text-muted", status];
   return (
     <span className={`inline-block text-xs font-medium px-2.5 py-1 rounded-full ${cls}`}>{label}</span>
   );

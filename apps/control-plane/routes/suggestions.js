@@ -44,13 +44,21 @@ function getDb() {
 router.get("/:tenantId", async (req, res) => {
   try {
     const limit = Math.min(parseInt(req.query.limit, 10) || 50, 200);
+    // No orderBy in the query → no composite index required.
+    // Sort client-side after fetch (50 items is fine).
     const snap = await getDb()
       .collection(COLLECTION)
       .where("tenant_id", "==", req.params.tenantId)
-      .orderBy("submitted_at", "desc")
-      .limit(limit)
+      .limit(limit * 2)
       .get();
-    const suggestions = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+    const suggestions = snap.docs
+      .map((d) => ({ id: d.id, ...d.data() }))
+      .sort((a, b) => {
+        const ta = a.submitted_at?._seconds || a.submitted_at?.seconds || 0;
+        const tb = b.submitted_at?._seconds || b.submitted_at?.seconds || 0;
+        return tb - ta;
+      })
+      .slice(0, limit);
     res.json({ count: suggestions.length, suggestions });
   } catch (err) {
     res.status(500).json({ error: err.message });

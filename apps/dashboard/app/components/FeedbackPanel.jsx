@@ -1,5 +1,6 @@
 "use client";
 import { useState } from "react";
+import { Icon } from "./Icon";
 
 export function FeedbackPanel({ callControlId, initialFeedback, currentEmail }) {
   const [rating, setRating] = useState(initialFeedback?.rating || null);
@@ -30,10 +31,10 @@ export function FeedbackPanel({ callControlId, initialFeedback, currentEmail }) 
     }
   }
 
-  const Btn = ({ value, label, icon, tone }) => {
+  const Btn = ({ value, label, tone }) => {
     const active = rating === value;
-    const baseTone = {
-      good: active ? "bg-emerald-600 text-white border-emerald-600" : "border-line text-muted hover:border-emerald-300 hover:text-emerald-700",
+    const cls = {
+      good: active ? "bg-success text-white border-success" : "border-line text-muted hover:border-success/40 hover:text-success",
       bad: active ? "bg-danger text-white border-danger" : "border-line text-muted hover:border-danger/40 hover:text-danger",
       followup: active ? "bg-warning text-white border-warning" : "border-line text-muted hover:border-warning/40 hover:text-warning",
       handled: active ? "bg-accent text-white border-accent" : "border-line text-muted hover:border-accent/40 hover:text-accent",
@@ -43,29 +44,31 @@ export function FeedbackPanel({ callControlId, initialFeedback, currentEmail }) 
         type="button"
         disabled={saving}
         onClick={() => submit(value)}
-        className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-medium transition border ${baseTone}`}
+        className={`px-3.5 py-2 rounded-md text-sm font-medium transition border ${cls}`}
       >
-        <span className="text-base leading-none">{icon}</span>
         {label}
       </button>
     );
   };
 
   return (
-    <section className="bg-surface rounded-2xl border border-line p-6 shadow-card">
+    <section className="bg-surface border border-line rounded-lg p-6">
       <div className="flex items-baseline justify-between mb-4">
-        <h2 className="text-base font-semibold text-ink">Hur gick samtalet?</h2>
+        <h2 className="text-[11px] uppercase tracking-widest text-muted font-semibold">Hur gick samtalet?</h2>
         {savedAt && !error && (
-          <p className="text-xs text-emerald-700">✓ Sparat</p>
+          <p className="text-xs text-success inline-flex items-center gap-1">
+            <Icon name="check" size={12} />
+            Sparat
+          </p>
         )}
         {error && <p className="text-xs text-danger">{error}</p>}
       </div>
 
       <div className="flex flex-wrap gap-2 mb-4">
-        <Btn value="good" label="Bra" icon="✓" tone="good" />
-        <Btn value="needs_followup" label="Behöver uppföljning" icon="⚠" tone="followup" />
-        <Btn value="handled" label="Hanterat" icon="✔" tone="handled" />
-        <Btn value="bad" label="Inte bra" icon="✗" tone="bad" />
+        <Btn value="good" label="Bra" tone="good" />
+        <Btn value="needs_followup" label="Behöver uppföljning" tone="followup" />
+        <Btn value="handled" label="Hanterat" tone="handled" />
+        <Btn value="bad" label="Inte bra" tone="bad" />
       </div>
 
       <textarea
@@ -73,7 +76,7 @@ export function FeedbackPanel({ callControlId, initialFeedback, currentEmail }) 
         value={note}
         onChange={(e) => setNote(e.target.value)}
         placeholder="Eventuell anteckning…"
-        className="w-full border border-line rounded-xl px-3 py-2 text-sm resize-none focus:outline-none focus:border-accent focus:ring-2 focus:ring-accent/20"
+        className="w-full border border-line rounded-md px-3 py-2 text-sm resize-none focus:outline-none focus:border-accent focus-ring"
       />
 
       <div className="flex items-center justify-end mt-2">

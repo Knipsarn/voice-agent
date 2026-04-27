@@ -26,11 +26,47 @@ const provider = createProvider();
  * Returns a fully resolved config object (all $file: refs expanded),
  * or null if the tenant is not found.
  *
+ * Also overlays customer-editable runtime overrides from `tenant_settings/<id>`:
+ *   - first_message: the spoken greeting (customers can edit from dashboard)
+ *
  * @param {string} tenantId
  * @returns {Promise<object|null>}
  */
 async function loadTenant(tenantId) {
-  return provider.loadTenant(tenantId);
+  const config = await provider.loadTenant(tenantId);
+  if (!config) return null;
+  return applyTenantSettingsOverrides(tenantId, config);
+}
+
+let _firestore = null;
+function getFirestore() {
+  if (_firestore) return _firestore;
+  try {
+    const { Firestore } = require("@google-cloud/firestore");
+    _firestore = new Firestore();
+    return _firestore;
+  } catch (err) {
+    return null;
+  }
+}
+
+async function applyTenantSettingsOverrides(tenantId, config) {
+  const db = getFirestore();
+  if (!db) return config;
+  try {
+    const snap = await db.collection("tenant_settings").doc(tenantId).get();
+    if (!snap.exists) return config;
+    const overrides = snap.data() || {};
+    const out = { ...config };
+    if (overrides.first_message && typeof overrides.first_message === "string") {
+      out.first_message = overrides.first_message;
+      out._overrides = { ...(out._overrides || {}), first_message: true };
+    }
+    return out;
+  } catch (err) {
+    console.warn(`[tenantLoader] Failed to apply tenant_settings override for ${tenantId}: ${err.message}`);
+    return config;
+  }
 }
 
 /**

@@ -4,44 +4,48 @@ export default {
   theme: {
     extend: {
       colors: {
-        ink: "#0f172a",
-        paper: "#f8fafc",
+        ink: "#0a0a0a",
+        paper: "#fcfcfd",
         surface: "#ffffff",
-        muted: "#64748b",
-        subtle: "#94a3b8",
-        line: "#e2e8f0",
+        muted: "#71717a",
+        subtle: "#a1a1aa",
+        line: "#e4e4e7",
+        "line-soft": "#f4f4f5",
         accent: {
-          DEFAULT: "#6366f1",
-          hover: "#4f46e5",
-          soft: "#eef2ff",
+          DEFAULT: "#5b5bd6",
+          hover: "#4848b8",
+          soft: "#f0f0fe",
         },
-        success: "#10b981",
-        warning: "#f59e0b",
-        danger: "#ef4444",
+        success: "#16a34a",
+        warning: "#d97706",
+        danger: "#dc2626",
       },
       fontFamily: {
         sans: ["-apple-system", "BlinkMacSystemFont", "'Inter'", "'Segoe UI'", "Roboto", "sans-serif"],
+        display: ["-apple-system", "'Inter'", "sans-serif"],
+      },
+      letterSpacing: {
+        tightest: "-0.04em",
       },
       boxShadow: {
-        card: "0 1px 2px 0 rgba(15, 23, 42, 0.04), 0 1px 3px 0 rgba(15, 23, 42, 0.06)",
-        elevated: "0 4px 24px -8px rgba(15, 23, 42, 0.12), 0 1px 3px 0 rgba(15, 23, 42, 0.06)",
-        glow: "0 0 0 4px rgba(99, 102, 241, 0.12)",
+        card: "0 1px 0 0 rgba(15, 23, 42, 0.04)",
+        elevated: "0 8px 32px -12px rgba(15, 23, 42, 0.12), 0 2px 4px -1px rgba(15, 23, 42, 0.04)",
+        focus: "0 0 0 3px rgba(91, 91, 214, 0.18)",
       },
       backgroundImage: {
-        "gradient-hero": "linear-gradient(135deg, #eef2ff 0%, #faf5ff 100%)",
-        "gradient-accent": "linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%)",
+        "grid-pattern": "linear-gradient(rgba(228, 228, 231, 0.5) 1px, transparent 1px), linear-gradient(90deg, rgba(228, 228, 231, 0.5) 1px, transparent 1px)",
       },
       animation: {
-        "fade-in": "fade-in 0.3s ease-out",
-        "slide-in-right": "slide-in-right 0.25s ease-out",
+        "fade-in": "fade-in 0.25s ease-out",
+        "slide-in-right": "slide-in-right 0.2s ease-out",
       },
       keyframes: {
         "fade-in": {
-          "0%": { opacity: "0", transform: "translateY(4px)" },
+          "0%": { opacity: "0", transform: "translateY(2px)" },
           "100%": { opacity: "1", transform: "translateY(0)" },
         },
         "slide-in-right": {
-          "0%": { opacity: "0", transform: "translateX(16px)" },
+          "0%": { opacity: "0", transform: "translateX(12px)" },
           "100%": { opacity: "1", transform: "translateX(0)" },
         },
       },

@@ -46,8 +46,8 @@ export function FortnoxCustomersPanel() {
     }
   }
 
-  if (loading) return <p className="text-sm text-gray-400">Loading Fortnox customers…</p>;
-  if (error) return <p className="text-sm text-red-600">{error}</p>;
+  if (loading) return <p className="text-sm text-subtle">Loading Fortnox customers…</p>;
+  if (error) return <p className="text-sm text-danger">{error}</p>;
 
   return (
     <div className="space-y-4">
@@ -60,12 +60,12 @@ export function FortnoxCustomersPanel() {
 
       {/* Customer table */}
       {customers.length === 0 ? (
-        <p className="text-sm text-gray-500">No customers in Fortnox yet.</p>
+        <p className="text-sm text-muted">No customers in Fortnox yet.</p>
       ) : (
-        <div className="overflow-hidden rounded-lg border border-gray-200">
+        <div className="overflow-hidden rounded-lg border border-line">
           <table className="w-full text-sm">
-            <thead className="bg-gray-50 border-b border-gray-200">
-              <tr className="text-left text-gray-500 uppercase text-xs tracking-wider">
+            <thead className="bg-line-soft border-b border-line">
+              <tr className="text-left text-muted uppercase text-xs tracking-wider">
                 <th className="px-4 py-2">#</th>
                 <th className="px-4 py-2">Name</th>
                 <th className="px-4 py-2">Org number</th>
@@ -77,8 +77,8 @@ export function FortnoxCustomersPanel() {
                 <tr key={c.customer_number}>
                   <td className="px-4 py-2 mono font-semibold text-accent">{c.customer_number}</td>
                   <td className="px-4 py-2">{c.name}</td>
-                  <td className="px-4 py-2 mono text-gray-500">{c.org_number || "—"}</td>
-                  <td className="px-4 py-2 text-gray-500">{c.email || "—"}</td>
+                  <td className="px-4 py-2 mono text-muted">{c.org_number || "—"}</td>
+                  <td className="px-4 py-2 text-muted">{c.email || "—"}</td>
                 </tr>
               ))}
             </tbody>
@@ -95,58 +95,58 @@ export function FortnoxCustomersPanel() {
           + Create new Fortnox customer
         </button>
       ) : (
-        <form onSubmit={handleCreate} className="border border-gray-200 rounded-lg p-4 space-y-3 bg-gray-50">
+        <form onSubmit={handleCreate} className="border border-line rounded-lg p-4 space-y-3 bg-line-soft">
           <p className="text-sm font-medium text-ink">New Fortnox customer</p>
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="block text-xs text-gray-500 mb-1">Company name *</label>
+              <label className="block text-xs text-muted mb-1">Company name *</label>
               <input
                 required
                 value={form.name}
                 onChange={(e) => setForm({ ...form, name: e.target.value })}
-                className="w-full border border-gray-300 rounded px-2 py-1.5 text-sm focus:outline-none focus:border-accent"
+                className="w-full border border-line rounded px-2 py-1.5 text-sm focus:outline-none focus:border-accent"
               />
             </div>
             <div>
-              <label className="block text-xs text-gray-500 mb-1">Org number</label>
+              <label className="block text-xs text-muted mb-1">Org number</label>
               <input
                 value={form.org_number}
                 onChange={(e) => setForm({ ...form, org_number: e.target.value })}
                 placeholder="556123-4567"
-                className="w-full border border-gray-300 rounded px-2 py-1.5 text-sm font-mono focus:outline-none focus:border-accent"
+                className="w-full border border-line rounded px-2 py-1.5 text-sm font-mono focus:outline-none focus:border-accent"
               />
             </div>
             <div>
-              <label className="block text-xs text-gray-500 mb-1">Invoice email</label>
+              <label className="block text-xs text-muted mb-1">Invoice email</label>
               <input
                 type="email"
                 value={form.email}
                 onChange={(e) => setForm({ ...form, email: e.target.value })}
-                className="w-full border border-gray-300 rounded px-2 py-1.5 text-sm focus:outline-none focus:border-accent"
+                className="w-full border border-line rounded px-2 py-1.5 text-sm focus:outline-none focus:border-accent"
               />
             </div>
             <div>
-              <label className="block text-xs text-gray-500 mb-1">City</label>
+              <label className="block text-xs text-muted mb-1">City</label>
               <input
                 value={form.city}
                 onChange={(e) => setForm({ ...form, city: e.target.value })}
-                className="w-full border border-gray-300 rounded px-2 py-1.5 text-sm focus:outline-none focus:border-accent"
+                className="w-full border border-line rounded px-2 py-1.5 text-sm focus:outline-none focus:border-accent"
               />
             </div>
           </div>
-          {createError && <p className="text-xs text-red-600">{createError}</p>}
+          {createError && <p className="text-xs text-danger">{createError}</p>}
           <div className="flex gap-2">
             <button
               type="submit"
               disabled={creating}
-              className="bg-ink text-white px-3 py-1.5 rounded text-sm font-medium hover:bg-gray-800 disabled:opacity-50"
+              className="bg-ink text-white px-3 py-1.5 rounded text-sm font-medium hover:bg-ink/85 disabled:opacity-50"
             >
               {creating ? "Creating…" : "Create in Fortnox"}
             </button>
             <button
               type="button"
               onClick={() => setShowForm(false)}
-              className="px-3 py-1.5 rounded text-sm text-gray-600 hover:bg-gray-100"
+              className="px-3 py-1.5 rounded text-sm text-muted hover:bg-line-soft"
             >
               Cancel
             </button>

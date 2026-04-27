@@ -96,7 +96,7 @@ export function SettingsForm({ tenantId, initialSettings, isAdmin, fortnoxConnec
   }
 
   return (
-    <form onSubmit={save} className="bg-white rounded-xl border border-gray-200 p-6 space-y-5">
+    <form onSubmit={save} className="bg-surface border border-line rounded-lg p-6 space-y-5">
       <div>
         <label className="block text-sm font-medium text-ink mb-1">Summary email destination</label>
         <input
@@ -104,9 +104,9 @@ export function SettingsForm({ tenantId, initialSettings, isAdmin, fortnoxConnec
           value={summaryEmail}
           onChange={(e) => setSummaryEmail(e.target.value)}
           placeholder="recipient@example.se"
-          className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-accent"
+          className="w-full border border-line rounded-md px-3 py-2 text-sm focus:outline-none focus:border-accent"
         />
-        <p className="text-xs text-gray-500 mt-1">Where post-call summaries get sent. Leave empty to disable.</p>
+        <p className="text-xs text-muted mt-1">Where post-call summaries get sent. Leave empty to disable.</p>
       </div>
 
       <div>
@@ -132,9 +132,9 @@ export function SettingsForm({ tenantId, initialSettings, isAdmin, fortnoxConnec
               value={authorizedEmails}
               onChange={(e) => setAuthorizedEmails(e.target.value)}
               placeholder="customer1@example.se, customer2@example.se"
-              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm font-mono focus:outline-none focus:border-accent"
+              className="w-full border border-line rounded-md px-3 py-2 text-sm font-mono focus:outline-none focus:border-accent"
             />
-            <p className="text-xs text-gray-500 mt-1">
+            <p className="text-xs text-muted mt-1">
               Comma-separated. These emails get scoped access to this tenant&apos;s dashboard.
             </p>
           </div>
@@ -143,20 +143,20 @@ export function SettingsForm({ tenantId, initialSettings, isAdmin, fortnoxConnec
           <div>
             <label className="block text-sm font-medium text-ink mb-1">Fortnox customer (admin only)</label>
             {!fortnoxConnected ? (
-              <p className="text-xs text-gray-400 italic">
+              <p className="text-xs text-subtle italic">
                 Connect Fortnox below to enable customer picker.
               </p>
             ) : fnLoading ? (
-              <p className="text-xs text-gray-400">Loading Fortnox customers…</p>
+              <p className="text-xs text-subtle">Loading Fortnox customers…</p>
             ) : fnError ? (
               <div className="space-y-1">
-                <p className="text-xs text-red-600">{fnError}</p>
+                <p className="text-xs text-danger">{fnError}</p>
                 <input
                   type="text"
                   value={fortnoxCustomerNumber}
                   onChange={(e) => setFortnoxCustomerNumber(e.target.value)}
                   placeholder="Enter customer number manually"
-                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm font-mono focus:outline-none focus:border-accent"
+                  className="w-full border border-line rounded-md px-3 py-2 text-sm font-mono focus:outline-none focus:border-accent"
                 />
               </div>
             ) : (
@@ -171,7 +171,7 @@ export function SettingsForm({ tenantId, initialSettings, isAdmin, fortnoxConnec
                       setShowCreateForm(false);
                     }
                   }}
-                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-accent"
+                  className="w-full border border-line rounded-md px-3 py-2 text-sm focus:outline-none focus:border-accent"
                 >
                   <option value="">— Select Fortnox customer —</option>
                   {(fnCustomers || []).map((c) => (
@@ -183,55 +183,55 @@ export function SettingsForm({ tenantId, initialSettings, isAdmin, fortnoxConnec
                 </select>
 
                 {fortnoxCustomerNumber && fortnoxCustomerNumber !== "__create__" && (
-                  <p className="text-xs text-gray-500 mono">Customer #{fortnoxCustomerNumber} selected</p>
+                  <p className="text-xs text-muted mono">Customer #{fortnoxCustomerNumber} selected</p>
                 )}
 
                 {showCreateForm && (
-                  <div className="border border-gray-200 rounded-lg p-4 bg-gray-50 space-y-3">
+                  <div className="border border-line rounded-lg p-4 bg-line-soft space-y-3">
                     <p className="text-sm font-medium text-ink">New Fortnox customer</p>
                     <div className="grid grid-cols-2 gap-3">
                       <div>
-                        <label className="block text-xs text-gray-500 mb-1">Company name *</label>
+                        <label className="block text-xs text-muted mb-1">Company name *</label>
                         <input
                           required
                           value={newCustomer.name}
                           onChange={(e) => setNewCustomer({ ...newCustomer, name: e.target.value })}
-                          className="w-full border border-gray-300 rounded px-2 py-1.5 text-sm focus:outline-none focus:border-accent"
+                          className="w-full border border-line rounded px-2 py-1.5 text-sm focus:outline-none focus:border-accent"
                         />
                       </div>
                       <div>
-                        <label className="block text-xs text-gray-500 mb-1">Org number</label>
+                        <label className="block text-xs text-muted mb-1">Org number</label>
                         <input
                           value={newCustomer.org_number}
                           onChange={(e) => setNewCustomer({ ...newCustomer, org_number: e.target.value })}
                           placeholder="556123-4567"
-                          className="w-full border border-gray-300 rounded px-2 py-1.5 text-sm font-mono focus:outline-none focus:border-accent"
+                          className="w-full border border-line rounded px-2 py-1.5 text-sm font-mono focus:outline-none focus:border-accent"
                         />
                       </div>
                       <div className="col-span-2">
-                        <label className="block text-xs text-gray-500 mb-1">Invoice email</label>
+                        <label className="block text-xs text-muted mb-1">Invoice email</label>
                         <input
                           type="email"
                           value={newCustomer.email}
                           onChange={(e) => setNewCustomer({ ...newCustomer, email: e.target.value })}
-                          className="w-full border border-gray-300 rounded px-2 py-1.5 text-sm focus:outline-none focus:border-accent"
+                          className="w-full border border-line rounded px-2 py-1.5 text-sm focus:outline-none focus:border-accent"
                         />
                       </div>
                     </div>
-                    {fnError && <p className="text-xs text-red-600">{fnError}</p>}
+                    {fnError && <p className="text-xs text-danger">{fnError}</p>}
                     <div className="flex gap-2">
                       <button
                         type="button"
                         onClick={createFortnoxCustomer}
                         disabled={creating || !newCustomer.name}
-                        className="bg-ink text-white px-3 py-1.5 rounded text-sm font-medium hover:bg-gray-800 disabled:opacity-50"
+                        className="bg-ink text-white px-3 py-1.5 rounded text-sm font-medium hover:bg-ink/85 disabled:opacity-50"
                       >
                         {creating ? "Creating…" : "Create in Fortnox"}
                       </button>
                       <button
                         type="button"
                         onClick={() => { setShowCreateForm(false); setFortnoxCustomerNumber(""); }}
-                        className="px-3 py-1.5 rounded text-sm text-gray-600 hover:bg-gray-100"
+                        className="px-3 py-1.5 rounded text-sm text-muted hover:bg-line-soft"
                       >
                         Cancel
                       </button>
@@ -244,15 +244,15 @@ export function SettingsForm({ tenantId, initialSettings, isAdmin, fortnoxConnec
         </>
       )}
 
-      <div className="flex items-center justify-between pt-2 border-t border-gray-100">
-        <div className="text-xs text-gray-500">
-          {savedAt && <span className="text-green-700">Saved at {new Date(savedAt).toLocaleTimeString("sv-SE")}</span>}
-          {error && <span className="text-red-600">{error}</span>}
+      <div className="flex items-center justify-between pt-2 border-t border-line">
+        <div className="text-xs text-muted">
+          {savedAt && <span className="text-success">Saved at {new Date(savedAt).toLocaleTimeString("sv-SE")}</span>}
+          {error && <span className="text-danger">{error}</span>}
         </div>
         <button
           type="submit"
           disabled={saving}
-          className="bg-ink text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-gray-800 disabled:opacity-50"
+          className="bg-ink text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-ink/85 disabled:opacity-50"
         >
           {saving ? "Saving…" : "Save settings"}
         </button>

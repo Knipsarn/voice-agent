@@ -3,8 +3,8 @@ import { redirect } from "next/navigation";
 
 import { authOptions } from "@/lib/auth-config";
 import { userScope } from "@/lib/tenant-map";
-import { getSettings, listTenants, getFortnoxStatus, listCalls } from "@/lib/control-plane";
-import { TopBar } from "../components/TopBar";
+import { getSettings, getFortnoxStatus, getTenant, listCalls } from "@/lib/control-plane";
+import { AppShell } from "../components/AppShell";
 import { SettingsForm } from "../components/SettingsForm";
 import { RATES } from "@/lib/pricing";
 
@@ -25,10 +25,9 @@ export default async function SettingsPage({ searchParams }) {
   const scope = userScope(session.user.email);
   if (!scope.admin && !scope.tenantId) {
     return (
-      <main className="min-h-screen">
-        <TopBar email={session.user.email} admin={false} />
+      <AppShell email={session.user.email} admin={false}>
         <div className="max-w-3xl mx-auto px-6 py-24 text-center text-muted">Ingen åtkomst.</div>
-      </main>
+      </AppShell>
     );
   }
 
@@ -36,40 +35,20 @@ export default async function SettingsPage({ searchParams }) {
   const fortnoxFlashMsg = searchParams?.msg;
 
   const tenantId = pickTenantId(scope, searchParams);
-
   if (scope.admin && !tenantId) {
-    const allTenants = await listTenants().catch(() => ({ tenants: [] }));
-    return (
-      <main className="min-h-screen">
-        <TopBar email={session.user.email} admin={true} />
-        <div className="max-w-3xl mx-auto px-6 py-12 space-y-4">
-          {fortnoxFlash === "connected" && <Flash tone="success">Fortnox connected. Pick a tenant to manage.</Flash>}
-          {fortnoxFlash === "error" && <Flash tone="danger">Fortnox: {fortnoxFlashMsg || "unknown error"}</Flash>}
-          <h1 className="text-2xl font-semibold text-ink mb-3">Pick a tenant</h1>
-          <ul className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            {(allTenants.tenants || []).map((t) => (
-              <li key={t.tenant_id}>
-                <a href={`/settings?tenant=${encodeURIComponent(t.tenant_id)}`} className="block bg-surface rounded-2xl border border-line px-5 py-4 card-hover">
-                  <div className="font-semibold text-ink">{t.company_name || t.tenant_id}</div>
-                  <div className="text-xs text-muted mono mt-1">{t.tenant_id}</div>
-                </a>
-              </li>
-            ))}
-          </ul>
-        </div>
-      </main>
-    );
+    redirect("/admin");
   }
 
-  // Fetch settings + (admin) fortnox + (tenant) current month billing summary
   const monthStart = startOfMonth();
-  const [settings, fortnoxStatus, monthCalls] = await Promise.all([
+  const [settings, fortnoxStatus, tenantDoc, monthCalls] = await Promise.all([
     getSettings(tenantId).catch(() => ({ tenant_id: tenantId })),
     scope.admin ? getFortnoxStatus().catch(() => ({ connected: false })) : null,
-    !scope.admin ? listCalls({ tenantId, since: monthStart.toISOString(), limit: 200 }).catch(() => ({ calls: [] })) : null,
+    getTenant(tenantId).catch(() => null),
+    !scope.admin ? listCalls({ tenantId, since: monthStart.toISOString(), limit: 500 }).catch(() => ({ calls: [] })) : null,
   ]);
 
-  // For tenant view, compute current month total
+  const tenantName = tenantDoc?.company_name || tenantId;
+
   let monthTotal = null;
   if (!scope.admin && monthCalls) {
     const minutes = (monthCalls.calls || []).reduce((s, c) => s + (c.duration_ms || 0) / 60000, 0);
@@ -83,37 +62,32 @@ export default async function SettingsPage({ searchParams }) {
   }
 
   return (
-    <main className="min-h-screen">
-      <TopBar email={session.user.email} admin={scope.admin} tenantId={tenantId} />
-      <div className="max-w-3xl mx-auto px-6 py-10 space-y-6">
-        <div>
-          <h1 className="text-3xl font-semibold text-ink tracking-tight">
-            {scope.admin ? "Settings" : "Inställningar"}
-          </h1>
-          <p className="text-sm text-muted mt-1">
-            {scope.admin ? `Tenant: ${tenantId}` : "Hantera ditt konto"}
-          </p>
-        </div>
+    <AppShell email={session.user.email} admin={scope.admin} tenantId={tenantId} tenantName={tenantName}>
+      <div className="max-w-3xl mx-auto px-6 md:px-10 py-8 md:py-12 space-y-6">
+        <header className="mb-2">
+          <p className="text-xs uppercase tracking-widest text-muted font-semibold">{scope.admin ? "Settings" : "Inställningar"}</p>
+          <h1 className="text-4xl font-semibold text-ink tracking-tightest mt-2">{tenantName}</h1>
+        </header>
 
         {fortnoxFlash === "connected" && <Flash tone="success">Fortnox kopplat.</Flash>}
         {fortnoxFlash === "error" && <Flash tone="danger">Fortnox: {fortnoxFlashMsg || "unknown error"}</Flash>}
 
-        {/* Tenant: current month billing summary inline */}
+        {/* Tenant: monthly billing summary inline */}
         {!scope.admin && monthTotal && (
-          <section className="bg-gradient-hero rounded-3xl border border-accent/10 p-6">
+          <section className="bg-surface border border-line rounded-lg p-6">
             <div className="flex items-baseline justify-between mb-1">
-              <h2 className="text-base font-semibold text-ink">Denna månad</h2>
-              <span className="text-xs text-muted">
+              <h2 className="text-[11px] uppercase tracking-widest text-muted font-semibold">Denna månad</h2>
+              <span className="text-xs text-subtle tabular">
                 {new Date().toLocaleDateString("sv-SE", { year: "numeric", month: "long" })}
               </span>
             </div>
-            <div className="text-4xl font-semibold mt-3 bg-gradient-accent bg-clip-text text-transparent">
-              {monthTotal.total.toFixed(0)} SEK
+            <div className="text-4xl font-semibold mt-3 text-ink tracking-tightest tabular">
+              {monthTotal.total.toFixed(0)} <span className="text-base text-subtle font-normal">kr</span>
             </div>
-            <p className="text-xs text-muted mt-1">
-              {STATIC_MONTHLY_SEK.toFixed(0)} SEK månadsavgift + {monthTotal.usage.toFixed(0)} SEK samtalstid
+            <p className="text-xs text-muted mt-1 tabular">
+              {STATIC_MONTHLY_SEK.toFixed(0)} kr månadsavgift + {monthTotal.usage.toFixed(0)} kr samtalstid
             </p>
-            <div className="grid grid-cols-3 gap-4 mt-5 pt-5 border-t border-accent/10">
+            <div className="grid grid-cols-3 gap-4 mt-5 pt-5 border-t border-line">
               <MiniStat label="Samtal" value={monthTotal.callCount} />
               <MiniStat label="Minuter" value={monthTotal.minutes.toFixed(0)} />
               <MiniStat label="Pris/min" value={`${RATES.per_minute_sek} kr`} />
@@ -132,16 +106,16 @@ export default async function SettingsPage({ searchParams }) {
           fortnoxConnected={!!fortnoxStatus?.connected}
         />
 
-        {/* Admin: Fortnox connection card */}
+        {/* Admin: Fortnox connection */}
         {scope.admin && (
-          <section className="bg-surface rounded-2xl border border-line p-6 space-y-3 shadow-card">
-            <h2 className="text-base font-semibold text-ink">Fortnox integration</h2>
+          <section className="bg-surface border border-line rounded-lg p-6 space-y-3">
+            <h2 className="text-[11px] uppercase tracking-widest text-muted font-semibold">Fortnox integration</h2>
             {fortnoxStatus?.connected ? (
               <div className="flex items-center gap-3">
-                <span className="inline-block bg-emerald-100 text-emerald-700 text-xs font-semibold px-2.5 py-1 rounded-full">
+                <span className="inline-block bg-success/10 text-success text-[10px] uppercase tracking-wider font-semibold px-2 py-1 rounded">
                   Connected
                 </span>
-                <span className="text-xs text-muted">
+                <span className="text-xs text-muted tabular">
                   Token expires {new Date(fortnoxStatus.expires_at).toLocaleString("sv-SE")}
                 </span>
               </div>
@@ -149,29 +123,29 @@ export default async function SettingsPage({ searchParams }) {
               <div className="space-y-2">
                 <p className="text-sm text-muted">
                   Run the local connect script to authorize once:
-                  <span className="block mono text-xs bg-paper rounded-md px-2 py-1.5 mt-1.5">node scripts/ops/fortnox-connect.js</span>
                 </p>
+                <code className="block text-xs bg-line-soft border border-line rounded px-3 py-2 mono">node scripts/ops/fortnox-connect.js</code>
               </div>
             )}
           </section>
         )}
       </div>
-    </main>
+    </AppShell>
   );
 }
 
 function Flash({ tone, children }) {
   const cls = tone === "success"
-    ? "bg-emerald-50 border-emerald-200 text-emerald-800"
-    : "bg-danger/5 border-danger/20 text-danger";
-  return <div className={`border rounded-2xl p-4 text-sm ${cls}`}>{children}</div>;
+    ? "bg-success/[0.06] border-success/20 text-success"
+    : "bg-danger/[0.06] border-danger/20 text-danger";
+  return <div className={`border rounded-md p-3 text-sm ${cls}`}>{children}</div>;
 }
 
 function MiniStat({ label, value }) {
   return (
     <div>
-      <div className="text-[10px] uppercase tracking-wider text-subtle font-semibold">{label}</div>
-      <div className="text-lg font-semibold text-ink mt-0.5">{value}</div>
+      <div className="text-[10px] uppercase tracking-widest text-muted font-semibold">{label}</div>
+      <div className="text-lg font-semibold text-ink mt-1 tabular">{value}</div>
     </div>
   );
 }
