@@ -43,8 +43,7 @@
           "transfer_to_RESCHEDULE":  "Uppringaren vill flytta/omboka en tid eller säger att kliniken ringt om flytt.",
           "transfer_to_MESSAGE":     "Uppringaren vill veta sin bokade tid eller dag, ringer tillbaka, har en fråga som kräver personal, eller ärendet kan inte lösas direkt utan återkoppling.",
           "transfer_to_CANCELLATION":"Uppringaren EXPLICIT säger att de vill avboka. Föreslå aldrig detta själv."
-        },
-        "backward_to": "QUALIFIER"
+        }
       },
       "LATE": {
         "label": "Sen till tid",
