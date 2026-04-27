@@ -6,7 +6,6 @@ import { userScope } from "@/lib/tenant-map";
 import { getSettings, listTenants, getFortnoxStatus } from "@/lib/control-plane";
 import { TopBar } from "../components/TopBar";
 import { SettingsForm } from "../components/SettingsForm";
-import { FortnoxCustomersPanel } from "../components/FortnoxCustomersPanel";
 
 function pickTenantId(scope, searchParams) {
   if (scope.admin) return searchParams?.tenant || null;
@@ -92,6 +91,7 @@ export default async function SettingsPage({ searchParams }) {
           tenantId={tenantId}
           initialSettings={settings}
           isAdmin={scope.admin}
+          fortnoxConnected={!!fortnoxStatus?.connected}
         />
 
         {/* Fortnox connection card (admin only) */}
@@ -128,18 +128,6 @@ export default async function SettingsPage({ searchParams }) {
           </section>
         )}
 
-        {/* Fortnox customers (admin, connected only) */}
-        {scope.admin && fortnoxStatus?.connected && (
-          <section className="bg-white rounded-xl border border-gray-200 p-6 space-y-4">
-            <div>
-              <h2 className="text-base font-medium text-ink">Fortnox customers</h2>
-              <p className="text-xs text-gray-500 mt-0.5">
-                Use the customer number in Settings → Fortnox customer number for each tenant.
-              </p>
-            </div>
-            <FortnoxCustomersPanel />
-          </section>
-        )}
 
         <section className="bg-blue-50 border border-blue-200 rounded-xl p-4 text-sm text-blue-900">
           <p className="font-medium mb-1">Where do call summaries go?</p>
