@@ -20,9 +20,9 @@ export async function POST(req) {
   }
 
   // Customers can edit summary_email + summary_email_mode only
-  // Admins can also edit authorized_customer_emails
+  // Admins can also edit authorized_customer_emails + fortnox_customer_number
   const allowed = scope.admin
-    ? ["summary_email", "summary_email_mode", "authorized_customer_emails"]
+    ? ["summary_email", "summary_email_mode", "authorized_customer_emails", "fortnox_customer_number"]
     : ["summary_email", "summary_email_mode"];
   const partial = {};
   for (const k of allowed) if (k in rest) partial[k] = rest[k];

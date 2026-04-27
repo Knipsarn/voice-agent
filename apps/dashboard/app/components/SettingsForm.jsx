@@ -7,6 +7,9 @@ export function SettingsForm({ tenantId, initialSettings, isAdmin }) {
   const [authorizedEmails, setAuthorizedEmails] = useState(
     (initialSettings.authorized_customer_emails || []).join(", "),
   );
+  const [fortnoxCustomerNumber, setFortnoxCustomerNumber] = useState(
+    initialSettings.fortnox_customer_number || "",
+  );
   const [saving, setSaving] = useState(false);
   const [savedAt, setSavedAt] = useState(null);
   const [error, setError] = useState(null);
@@ -25,6 +28,7 @@ export function SettingsForm({ tenantId, initialSettings, isAdmin }) {
           .split(",")
           .map((s) => s.trim().toLowerCase())
           .filter(Boolean);
+        partial.fortnox_customer_number = fortnoxCustomerNumber.trim() || null;
       }
       const res = await fetch("/api/settings", {
         method: "POST",
@@ -74,21 +78,37 @@ export function SettingsForm({ tenantId, initialSettings, isAdmin }) {
       </div>
 
       {isAdmin && (
-        <div>
-          <label className="block text-sm font-medium text-ink mb-1">Authorized customer emails (admin only)</label>
-          <textarea
-            rows={3}
-            value={authorizedEmails}
-            onChange={(e) => setAuthorizedEmails(e.target.value)}
-            placeholder="customer1@example.se, customer2@example.se"
-            className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm font-mono focus:outline-none focus:border-accent"
-          />
-          <p className="text-xs text-gray-500 mt-1">
-            Comma-separated. These emails get scoped access to this tenant's dashboard.
-            <br />
-            Note: also requires backend env update <span className="mono">DASHBOARD_TENANT_EMAILS</span> to take effect (auto-loading from Firestore comes next sprint).
-          </p>
-        </div>
+        <>
+          <div>
+            <label className="block text-sm font-medium text-ink mb-1">Authorized customer emails (admin only)</label>
+            <textarea
+              rows={3}
+              value={authorizedEmails}
+              onChange={(e) => setAuthorizedEmails(e.target.value)}
+              placeholder="customer1@example.se, customer2@example.se"
+              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm font-mono focus:outline-none focus:border-accent"
+            />
+            <p className="text-xs text-gray-500 mt-1">
+              Comma-separated. These emails get scoped access to this tenant&apos;s dashboard.
+              <br />
+              Note: also requires backend env update <span className="mono">DASHBOARD_TENANT_EMAILS</span> to take effect (auto-loading from Firestore comes next sprint).
+            </p>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-ink mb-1">Fortnox customer number (admin only)</label>
+            <input
+              type="text"
+              value={fortnoxCustomerNumber}
+              onChange={(e) => setFortnoxCustomerNumber(e.target.value)}
+              placeholder="e.g. 1"
+              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm font-mono focus:outline-none focus:border-accent"
+            />
+            <p className="text-xs text-gray-500 mt-1">
+              The customer number in your Fortnox account. Used when generating monthly invoices.
+            </p>
+          </div>
+        </>
       )}
 
       <div className="flex items-center justify-between pt-2 border-t border-gray-100">

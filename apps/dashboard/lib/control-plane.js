@@ -78,3 +78,27 @@ export async function saveSettings(tenantId, partial) {
 export async function postFeedback(callControlId, { rating, note, by }) {
   return cpJson("POST", `/calls/${encodeURIComponent(callControlId)}/feedback`, { rating, note, by });
 }
+
+export async function getBillingInvoice(tenantId, month) {
+  return cpGet(`/billing/${encodeURIComponent(tenantId)}/${encodeURIComponent(month)}`);
+}
+
+export async function createInvoice(tenantId, month) {
+  return cpJson("POST", `/billing/${encodeURIComponent(tenantId)}/${encodeURIComponent(month)}/create`, {});
+}
+
+export async function sendInvoice(tenantId, month) {
+  return cpJson("POST", `/billing/${encodeURIComponent(tenantId)}/${encodeURIComponent(month)}/send`, {});
+}
+
+export async function getFortnoxStatus() {
+  return cpGet("/fortnox/status");
+}
+
+export async function listFortnoxCustomers() {
+  return cpGet("/billing/customers");
+}
+
+export async function createFortnoxCustomer(data) {
+  return cpJson("POST", "/billing/customers", data);
+}

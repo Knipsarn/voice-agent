@@ -25,6 +25,8 @@ const logsRouter = require("./routes/logs");
 const numbersRouter = require("./routes/numbers");
 const callsRouter = require("./routes/calls");
 const settingsRouter = require("./routes/settings");
+const billingRouter = require("./routes/billing");
+const fortnoxAuthRouter = require("./routes/fortnox-auth");
 
 const app = express();
 app.use(express.json());
@@ -57,6 +59,8 @@ app.use("/logs", logsRouter);
 app.use("/numbers", numbersRouter);
 app.use("/calls", callsRouter);
 app.use("/settings", settingsRouter);
+app.use("/billing", billingRouter);
+app.use("/fortnox", fortnoxAuthRouter);
 
 // ── 404 ──────────────────────────────────────────────────────────────────────
 app.use((req, res) => {

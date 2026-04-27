@@ -3,9 +3,10 @@ import { redirect } from "next/navigation";
 
 import { authOptions } from "@/lib/auth-config";
 import { userScope } from "@/lib/tenant-map";
-import { getSettings, listTenants } from "@/lib/control-plane";
+import { getSettings, listTenants, getFortnoxStatus } from "@/lib/control-plane";
 import { TopBar } from "../components/TopBar";
 import { SettingsForm } from "../components/SettingsForm";
+import { FortnoxCustomersPanel } from "../components/FortnoxCustomersPanel";
 
 function pickTenantId(scope, searchParams) {
   if (scope.admin) return searchParams?.tenant || null;
@@ -48,7 +49,13 @@ export default async function SettingsPage({ searchParams }) {
     );
   }
 
-  const settings = await getSettings(tenantId).catch(() => ({ tenant_id: tenantId }));
+  const [settings, fortnoxStatus] = await Promise.all([
+    getSettings(tenantId).catch(() => ({ tenant_id: tenantId })),
+    scope.admin ? getFortnoxStatus().catch(() => ({ connected: false })) : null,
+  ]);
+
+  const fortnoxFlashResult = searchParams?.fortnox;
+  const fortnoxFlashMsg = searchParams?.msg;
 
   return (
     <main className="min-h-screen bg-paper">
@@ -59,11 +66,70 @@ export default async function SettingsPage({ searchParams }) {
           <p className="text-sm text-gray-500 mt-1">Tenant: {tenantId}</p>
         </div>
 
+        {/* Fortnox OAuth flash message */}
+        {fortnoxFlashResult === "connected" && (
+          <div className="bg-green-50 border border-green-200 rounded-xl p-4 text-sm text-green-800">
+            Fortnox connected successfully. You can now create invoices from the Billing page.
+          </div>
+        )}
+        {fortnoxFlashResult === "error" && (
+          <div className="bg-red-50 border border-red-200 rounded-xl p-4 text-sm text-red-800">
+            Fortnox connection failed: {fortnoxFlashMsg || "unknown error"}
+          </div>
+        )}
+
         <SettingsForm
           tenantId={tenantId}
           initialSettings={settings}
           isAdmin={scope.admin}
         />
+
+        {/* Fortnox connection card (admin only) */}
+        {scope.admin && (
+          <section className="bg-white rounded-xl border border-gray-200 p-6 space-y-3">
+            <h2 className="text-base font-medium text-ink">Fortnox integration</h2>
+            {fortnoxStatus?.connected ? (
+              <div className="flex items-center gap-3">
+                <span className="inline-block bg-green-100 text-green-700 text-xs font-medium px-2.5 py-1 rounded-full">
+                  Connected
+                </span>
+                <span className="text-xs text-gray-500">
+                  Token expires {new Date(fortnoxStatus.expires_at).toLocaleString("sv-SE")}
+                  {fortnoxStatus.needs_refresh && " (refresh pending)"}
+                </span>
+              </div>
+            ) : (
+              <div className="space-y-2">
+                <p className="text-sm text-gray-600">
+                  Connect your Fortnox account to enable automatic invoice generation on the Billing page.
+                </p>
+                <a
+                  href="/api/fortnox/connect"
+                  className="inline-block bg-ink text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-gray-800"
+                >
+                  Connect Fortnox
+                </a>
+              </div>
+            )}
+            <p className="text-xs text-gray-400">
+              Requires <span className="mono">FORTNOX_CLIENT_ID</span> and{" "}
+              <span className="mono">FORTNOX_CLIENT_SECRET</span> set in Cloud Run env / Secret Manager.
+            </p>
+          </section>
+        )}
+
+        {/* Fortnox customers (admin, connected only) */}
+        {scope.admin && fortnoxStatus?.connected && (
+          <section className="bg-white rounded-xl border border-gray-200 p-6 space-y-4">
+            <div>
+              <h2 className="text-base font-medium text-ink">Fortnox customers</h2>
+              <p className="text-xs text-gray-500 mt-0.5">
+                Use the customer number in Settings → Fortnox customer number for each tenant.
+              </p>
+            </div>
+            <FortnoxCustomersPanel />
+          </section>
+        )}
 
         <section className="bg-blue-50 border border-blue-200 rounded-xl p-4 text-sm text-blue-900">
           <p className="font-medium mb-1">Where do call summaries go?</p>

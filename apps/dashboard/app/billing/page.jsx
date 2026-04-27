@@ -3,9 +3,10 @@ import { redirect } from "next/navigation";
 
 import { authOptions } from "@/lib/auth-config";
 import { userScope } from "@/lib/tenant-map";
-import { listCalls, listTenants } from "@/lib/control-plane";
+import { listCalls, listTenants, getBillingInvoice } from "@/lib/control-plane";
 import { priceForCall, marginForCall, RATES } from "@/lib/pricing";
 import { TopBar } from "../components/TopBar";
+import { InvoiceActionPanel } from "../components/InvoiceActionPanel";
 
 const STATIC_MONTHLY_SEK = parseFloat(process.env.STATIC_MONTHLY_FEE_SEK || "1000");
 
@@ -23,6 +24,9 @@ function formatTime(ts) {
 function pickTenantId(scope, searchParams) {
   if (scope.admin) return searchParams?.tenant || null;
   return scope.tenantId;
+}
+function currentMonthKey(d = new Date()) {
+  return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}`;
 }
 
 export default async function BillingPage({ searchParams }) {
@@ -63,19 +67,24 @@ export default async function BillingPage({ searchParams }) {
 
   const monthStart = startOfMonth();
   const nextInvoice = startOfNextMonth();
-  const callsRes = await listCalls({
-    tenantId,
-    since: monthStart.toISOString(),
-    limit: 200,
-    includeCosts: scope.admin,
-  });
+  const month = currentMonthKey();
+
+  const [callsRes, invoiceRecord] = await Promise.all([
+    listCalls({
+      tenantId,
+      since: monthStart.toISOString(),
+      limit: 200,
+      includeCosts: scope.admin,
+    }),
+    scope.admin ? getBillingInvoice(tenantId, month).catch(() => ({ status: "not_invoiced" })) : null,
+  ]);
   const calls = callsRes.calls || [];
 
   const totalMinutes = calls.reduce((s, c) => s + (c.duration_ms || 0) / 60000, 0);
   const usagePrice = calls.reduce((s, c) => s + priceForCall(c.duration_ms), 0);
   const totalPrice = usagePrice + STATIC_MONTHLY_SEK;
   const totalCost = scope.admin ? calls.reduce((s, c) => s + (c.costs?.cost_total_sek || 0), 0) : 0;
-  const totalMargin = totalPrice - totalCost - 0; // static fee allocation = 0 cost
+  const totalMargin = totalPrice - totalCost;
 
   const monthLabel = monthStart.toLocaleDateString("sv-SE", { year: "numeric", month: "long" });
 
@@ -116,6 +125,18 @@ export default async function BillingPage({ searchParams }) {
             </div>
           )}
         </section>
+
+        {/* Fortnox invoice (admin only) */}
+        {scope.admin && (
+          <section className="bg-white rounded-xl border border-gray-200 p-6">
+            <h2 className="text-base font-medium text-ink mb-4">Fortnox invoice — {monthLabel}</h2>
+            <InvoiceActionPanel
+              tenantId={tenantId}
+              month={month}
+              initialInvoice={invoiceRecord}
+            />
+          </section>
+        )}
 
         {/* Line items */}
         <section className="bg-white rounded-xl border border-gray-200 overflow-hidden">
@@ -183,14 +204,6 @@ export default async function BillingPage({ searchParams }) {
               </tbody>
             </table>
           )}
-        </section>
-
-        <section className="bg-blue-50 border border-blue-200 rounded-xl p-4 text-sm text-blue-900">
-          <p className="font-medium mb-1">Auto-invoicing via Fortnox — coming soon</p>
-          <p>
-            Once enabled, this monthly total will be sent as an invoice to your Fortnox account on the 1st of next month.
-            Configure your Fortnox connection (admin only) when ready.
-          </p>
         </section>
       </div>
     </main>
