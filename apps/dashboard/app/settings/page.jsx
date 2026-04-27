@@ -26,6 +26,9 @@ export default async function SettingsPage({ searchParams }) {
     );
   }
 
+  const fortnoxFlash = searchParams?.fortnox;
+  const fortnoxFlashMsg = searchParams?.msg;
+
   const tenantId = pickTenantId(scope, searchParams);
   if (scope.admin && !tenantId) {
     const allTenants = await listTenants().catch(() => ({ tenants: [] }));
@@ -33,6 +36,16 @@ export default async function SettingsPage({ searchParams }) {
       <main className="min-h-screen bg-paper">
         <TopBar email={session.user.email} admin={true} />
         <div className="max-w-3xl mx-auto px-6 py-16 space-y-4">
+          {fortnoxFlash === "connected" && (
+            <div className="bg-green-50 border border-green-200 rounded-xl p-4 text-sm text-green-800">
+              Fortnox connected successfully. Pick a tenant below to manage its settings.
+            </div>
+          )}
+          {fortnoxFlash === "error" && (
+            <div className="bg-red-50 border border-red-200 rounded-xl p-4 text-sm text-red-800">
+              Fortnox connection failed: {fortnoxFlashMsg || "unknown error"}
+            </div>
+          )}
           <h1 className="text-2xl font-semibold text-ink">Pick a tenant</h1>
           <ul className="space-y-2">
             {(allTenants.tenants || []).map((t) => (
@@ -54,9 +67,6 @@ export default async function SettingsPage({ searchParams }) {
     scope.admin ? getFortnoxStatus().catch(() => ({ connected: false })) : null,
   ]);
 
-  const fortnoxFlashResult = searchParams?.fortnox;
-  const fortnoxFlashMsg = searchParams?.msg;
-
   return (
     <main className="min-h-screen bg-paper">
       <TopBar email={session.user.email} admin={scope.admin} />
@@ -67,12 +77,12 @@ export default async function SettingsPage({ searchParams }) {
         </div>
 
         {/* Fortnox OAuth flash message */}
-        {fortnoxFlashResult === "connected" && (
+        {fortnoxFlash === "connected" && (
           <div className="bg-green-50 border border-green-200 rounded-xl p-4 text-sm text-green-800">
             Fortnox connected successfully. You can now create invoices from the Billing page.
           </div>
         )}
-        {fortnoxFlashResult === "error" && (
+        {fortnoxFlash === "error" && (
           <div className="bg-red-50 border border-red-200 rounded-xl p-4 text-sm text-red-800">
             Fortnox connection failed: {fortnoxFlashMsg || "unknown error"}
           </div>
@@ -104,7 +114,7 @@ export default async function SettingsPage({ searchParams }) {
                   Connect your Fortnox account to enable automatic invoice generation on the Billing page.
                 </p>
                 <a
-                  href="/api/fortnox/connect"
+                  href={`/api/fortnox/connect?tenant=${encodeURIComponent(tenantId)}`}
                   className="inline-block bg-ink text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-gray-800"
                 >
                   Connect Fortnox

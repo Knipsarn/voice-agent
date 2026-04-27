@@ -13,12 +13,17 @@ export async function GET(req) {
   const { searchParams } = new URL(req.url);
   const code = searchParams.get("code");
   const error = searchParams.get("error");
+  const state = searchParams.get("state") || "";
+
+  // Extract tenant from state: "fortnox_connect:<tenantId>"
+  const tenant = state.startsWith("fortnox_connect:") ? state.slice("fortnox_connect:".length) : "";
+  const backUrl = tenant ? `/settings?tenant=${encodeURIComponent(tenant)}` : "/settings";
 
   if (error) {
-    return redirect(`/settings?fortnox=error&msg=${encodeURIComponent(error)}`);
+    return redirect(`${backUrl}&fortnox=error&msg=${encodeURIComponent(error)}`);
   }
   if (!code) {
-    return redirect("/settings?fortnox=error&msg=no_code");
+    return redirect(`${backUrl}&fortnox=error&msg=no_code`);
   }
 
   try {
@@ -32,10 +37,10 @@ export async function GET(req) {
     });
     if (!res.ok) {
       const text = await res.text().catch(() => "exchange_failed");
-      return redirect(`/settings?fortnox=error&msg=${encodeURIComponent(text.slice(0, 200))}`);
+      return redirect(`${backUrl}&fortnox=error&msg=${encodeURIComponent(text.slice(0, 200))}`);
     }
-    return redirect("/settings?fortnox=connected");
+    return redirect(`${backUrl}&fortnox=connected`);
   } catch (err) {
-    return redirect(`/settings?fortnox=error&msg=${encodeURIComponent(err.message)}`);
+    return redirect(`${backUrl}&fortnox=error&msg=${encodeURIComponent(err.message)}`);
   }
 }
