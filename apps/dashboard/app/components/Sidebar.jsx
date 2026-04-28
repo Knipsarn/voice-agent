@@ -17,6 +17,7 @@ const ADMIN_NAV = [
   { href: "/admin", label: "Customers", icon: "users" },
   { href: "/admin/stats", label: "Statistics", icon: "chart" },
   { href: "/admin/suggestions", label: "Suggestions", icon: "inbox" },
+  { href: "/admin/incidents", label: "Incidents", icon: "alert" },
 ];
 
 const ADMIN_TENANT_NAV = (tenant) => [

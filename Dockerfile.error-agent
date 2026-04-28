@@ -1,0 +1,11 @@
+FROM node:20-alpine
+
+WORKDIR /app/apps/error-agent
+
+COPY apps/error-agent/package*.json ./
+RUN npm install --omit=dev
+
+COPY apps/error-agent/index.js ./
+
+EXPOSE 8080
+CMD ["node", "index.js"]

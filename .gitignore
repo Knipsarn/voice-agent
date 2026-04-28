@@ -2,6 +2,9 @@
 config/.env
 **/.env
 *.env
+config/operator-sa.json
+**/*-sa.json
+**/*-key.json
 
 # Node
 node_modules/

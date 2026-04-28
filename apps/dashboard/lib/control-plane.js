@@ -116,3 +116,16 @@ export async function createSuggestion(tenantId, { text, submitted_by, call_cont
 export async function updateSuggestion(tenantId, id, partial) {
   return cpJson("POST", `/suggestions/${encodeURIComponent(tenantId)}/${encodeURIComponent(id)}`, partial);
 }
+
+export async function listIncidents({ status, service, since, limit = 50 } = {}) {
+  const params = new URLSearchParams();
+  if (status) params.set("status", status);
+  if (service) params.set("service", service);
+  if (since) params.set("since", since);
+  params.set("limit", String(limit));
+  return cpGet(`/incidents?${params.toString()}`);
+}
+
+export async function updateIncident(id, partial) {
+  return cpJson("POST", `/incidents/${encodeURIComponent(id)}`, partial);
+}

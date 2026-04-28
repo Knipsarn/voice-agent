@@ -1,0 +1,13 @@
+{
+  "name": "error-agent",
+  "version": "1.0.0",
+  "description": "Subscribes to Cloud Logging errors via Pub/Sub, classifies with GPT, stores incidents in Firestore",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js"
+  },
+  "dependencies": {
+    "@google-cloud/firestore": "^7.0.0",
+    "express": "^4.21.0"
+  }
+}

@@ -33,15 +33,10 @@ export default async function BillingPage({ searchParams }) {
   const session = await getServerSession(authOptions);
   if (!session?.user?.email) redirect("/login");
   const scope = userScope(session.user.email);
-  if (!scope.admin && !scope.tenantId) {
-    return (
-      <AppShell email={session.user.email} admin={false}>
-        <div className="max-w-3xl mx-auto px-6 py-24 text-center text-muted">Ingen åtkomst.</div>
-      </AppShell>
-    );
-  }
+  // Tenants don't see billing — they see their month total in /settings instead
+  if (!scope.admin) redirect("/settings");
   const tenantId = pickTenantId(scope, searchParams);
-  if (scope.admin && !tenantId) redirect("/admin");
+  if (!tenantId) redirect("/admin");
 
   const monthStart = startOfMonth();
   const nextInvoice = startOfNextMonth();
