@@ -31,6 +31,7 @@ const suggestionsRouter = require("./routes/suggestions");
 const incidentsRouter = require("./routes/incidents");
 const voicemailRouter = require("./routes/voicemail");
 const casesRouter = require("./routes/cases");
+const smsRouter = require("./routes/sms");
 
 const app = express();
 app.use(express.json());
@@ -69,6 +70,7 @@ app.use("/suggestions", suggestionsRouter);
 app.use("/incidents", incidentsRouter);
 app.use("/voicemail", voicemailRouter);
 app.use("/cases", casesRouter);
+app.use("/sms", smsRouter);
 
 // ── 404 ──────────────────────────────────────────────────────────────────────
 app.use((req, res) => {
