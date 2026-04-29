@@ -116,10 +116,12 @@ async function analyzeAndPatch(incident, repoTree, githubOps) {
 
 ## Your job
 1. Read the incident details carefully
-2. Use the tools to investigate the relevant source files
-3. Understand the full call path that led to the error
-4. Propose a minimal, targeted fix
-5. Call propose_patch when confident
+2. **First decide: is this a real bug or a transient/expected error?**
+   - Transient: network timeouts, temporary OpenAI/Telnyx API blips, one-off cold-start issues
+   - Real bug: code errors, null reference, missing config, logic flaw, repeated pattern
+3. If transient: call propose_patch immediately with no changes and explain why in no_fix_reason
+4. If real bug: investigate the relevant source files, trace the call path, propose a fix
+5. Call propose_patch with your findings when confident
 
 ## Rules
 - Read files before modifying them — never guess at file contents
@@ -129,7 +131,7 @@ async function analyzeAndPatch(incident, repoTree, githubOps) {
 - Never modify: cloudbuild*.yaml, Dockerfiles, package.json (unless dependency is the issue)
 - If the fix requires a config change in configs/tenants/*.json, include it
 - Maximum 5 files per patch
-- If you cannot safely fix it, call propose_patch with no changes and explain why
+- If you genuinely cannot safely fix it, call propose_patch with no changes and explain why
 
 ## Available repo files
 ${repoTree.files.slice(0, 500).join("\n")}`;

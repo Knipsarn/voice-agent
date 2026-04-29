@@ -19,7 +19,7 @@ export default async function IncidentsPage() {
   const incidents = data.incidents || [];
 
   const newCount = incidents.filter((i) => (i.status || "new") === "new").length;
-  const actionableCount = incidents.filter((i) => i.ai?.is_actionable && (i.status || "new") === "new").length;
+  const patchCount = incidents.filter((i) => i.status === "patch_proposed").length;
 
   return (
     <AppShell email={session.user.email} admin={true}>
@@ -28,13 +28,13 @@ export default async function IncidentsPage() {
           <p className="text-xs uppercase tracking-widest text-muted font-semibold">Errors observed</p>
           <h1 className="text-4xl font-semibold text-ink tracking-tightest mt-2">Incidents</h1>
           <p className="text-sm text-muted mt-1">
-            Cloud Logging errors auto-classified by GPT-4o-mini.{" "}
+            Cloud Logging errors investigated by Claude with full code context.{" "}
             {newCount > 0 ? (
               <span className="text-ink font-medium">{newCount} new</span>
             ) : (
               <span>All triaged.</span>
             )}
-            {actionableCount > 0 && <span className="text-warning font-medium ml-1">· {actionableCount} actionable</span>}
+            {patchCount > 0 && <span className="text-accent font-medium ml-1">· {patchCount} patch{patchCount !== 1 ? "es" : ""} ready to review</span>}
           </p>
         </header>
 
