@@ -120,8 +120,42 @@ export function IncidentsList({ initial }) {
                     </div>
                   )}
 
+                  {/* Patch agent status */}
+                  {(inc.patch_result || inc.status === "investigating") && (
+                    <div className="pt-2 space-y-1.5">
+                      <div className="text-[10px] uppercase tracking-widest text-muted font-semibold">Auto-patch</div>
+                      {inc.patch_pr_url ? (
+                        <a
+                          href={inc.patch_pr_url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="inline-flex items-center gap-1.5 text-xs px-2.5 py-1 rounded-md bg-accent-soft text-accent border border-accent/20 hover:bg-accent hover:text-white transition-colors"
+                        >
+                          <Icon name="globe" size={11} />
+                          View PR #{inc.patch_pr_number}
+                        </a>
+                      ) : inc.status === "investigating" ? (
+                        <span className="text-xs text-muted italic">Claude is investigating…</span>
+                      ) : inc.patch_no_fix_reason ? (
+                        <span className="text-xs text-muted">{inc.patch_no_fix_reason}</span>
+                      ) : null}
+                      {inc.patch_analysis && (
+                        <div className="text-xs text-ink leading-relaxed">{inc.patch_analysis.slice(0, 300)}{inc.patch_analysis.length > 300 ? "…" : ""}</div>
+                      )}
+                      {inc.patch_risk && (
+                        <span className={`text-[10px] font-semibold uppercase px-1.5 py-0.5 rounded ${
+                          inc.patch_risk === "low" ? "bg-success/10 text-success" :
+                          inc.patch_risk === "medium" ? "bg-warning/10 text-warning" :
+                          "bg-danger/10 text-danger"
+                        }`}>
+                          {inc.patch_risk} risk
+                        </span>
+                      )}
+                    </div>
+                  )}
+
                   <div className="flex gap-2 pt-2">
-                    {(inc.status || "new") !== "acknowledged" && (
+                    {!["investigating", "patch_proposed"].includes(inc.status) && (inc.status || "new") !== "acknowledged" && (
                       <button onClick={() => setStatus(inc.id, "acknowledged")} className="text-xs px-2.5 py-1 rounded-md border border-line text-muted hover:text-ink hover:border-ink">
                         Acknowledge
                       </button>

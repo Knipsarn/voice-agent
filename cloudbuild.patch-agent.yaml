@@ -1,0 +1,46 @@
+steps:
+  - name: 'gcr.io/cloud-builders/docker'
+    args:
+      - build
+      - -f
+      - Dockerfile.patch-agent
+      - -t
+      - gcr.io/ldk-clean/patch-agent-service
+      - .
+
+  - name: 'gcr.io/cloud-builders/docker'
+    args:
+      - push
+      - gcr.io/ldk-clean/patch-agent-service
+
+  - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
+    entrypoint: gcloud
+    args:
+      - run
+      - deploy
+      - patch-agent-service
+      - --image=gcr.io/ldk-clean/patch-agent-service:latest
+      - --region=europe-west1
+      - --project=ldk-clean
+      - --memory=1Gi
+      - --timeout=300
+      - --concurrency=4
+      - --min-instances=0
+      - --quiet
+
+  - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
+    entrypoint: gcloud
+    args:
+      - run
+      - services
+      - update-traffic
+      - patch-agent-service
+      - --to-latest
+      - --region=europe-west1
+      - --project=ldk-clean
+
+images:
+  - gcr.io/ldk-clean/patch-agent-service
+
+options:
+  logging: CLOUD_LOGGING_ONLY

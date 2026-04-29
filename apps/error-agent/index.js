@@ -19,7 +19,8 @@ const { Firestore, FieldValue } = require("@google-cloud/firestore");
 
 const PORT = process.env.PORT || 8080;
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
-const CLASSIFY_MODEL = process.env.CLASSIFY_MODEL || "gpt-4o-mini";
+const CLASSIFY_MODEL = process.env.CLASSIFY_MODEL || "gpt-5.2";
+const PATCH_AGENT_URL = process.env.PATCH_AGENT_URL || "";
 const COLLECTION = "incidents";
 const PROJECT = process.env.GOOGLE_CLOUD_PROJECT || "ldk-clean";
 
@@ -57,12 +58,22 @@ app.post("/", async (req, res) => {
 
   const incident = await buildIncident(logEntry);
 
+  let incidentId = null;
   try {
     const ref = await db.collection(COLLECTION).add(incident);
-    console.log(`[error-agent] stored incident ${ref.id} (severity=${severity}, service=${incident.service})`);
+    incidentId = ref.id;
+    console.log(`[error-agent] stored incident ${incidentId} (severity=${severity}, service=${incident.service})`);
   } catch (err) {
     console.error("[error-agent] Failed to store incident:", err.message);
-    // Still ack — Pub/Sub will dead-letter via retry policy
+  }
+
+  // Fire patch-agent asynchronously for actionable incidents (don't await)
+  if (incidentId && incident.ai?.is_actionable && PATCH_AGENT_URL) {
+    fetch(`${PATCH_AGENT_URL}/patch`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ incident_id: incidentId }),
+    }).catch((err) => console.warn(`[error-agent] patch-agent trigger failed: ${err.message}`));
   }
 
   res.status(204).end();
