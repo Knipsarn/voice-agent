@@ -56,6 +56,7 @@ router.post("/:tenantId", async (req, res) => {
       "sms_post_call_message",           // outbound SMS sent after each call
       "sms_fallback_needs_info",         // reply when customer sends non-contact text (no email on file)
       "sms_fallback_already_processed",  // reply when customer sends non-contact text (email known)
+      "sms_reminder_message",            // shorter reminder sent by /sms/reminders/run cron
     ];
     const update = {};
     for (const k of ALLOWED) {

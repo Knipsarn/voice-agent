@@ -32,6 +32,7 @@ const incidentsRouter = require("./routes/incidents");
 const voicemailRouter = require("./routes/voicemail");
 const casesRouter = require("./routes/cases");
 const smsRouter = require("./routes/sms");
+const pipefyRouter = require("./routes/pipefy");
 
 const app = express();
 app.use(express.json());
@@ -71,6 +72,7 @@ app.use("/incidents", incidentsRouter);
 app.use("/voicemail", voicemailRouter);
 app.use("/cases", casesRouter);
 app.use("/sms", smsRouter);
+app.use("/pipefy", pipefyRouter);
 
 // ── 404 ──────────────────────────────────────────────────────────────────────
 app.use((req, res) => {
