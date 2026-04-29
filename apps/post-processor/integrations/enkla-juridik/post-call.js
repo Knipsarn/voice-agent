@@ -103,7 +103,7 @@ function appendSummary(existingSummary, newSummary) {
 }
 
 module.exports = async function enklaJuridikPostCall({ call, summary }) {
-  const phone = call.caller_number || call.phone;
+  const phone = call.from_number || call.caller_number || call.phone;
   if (!phone) {
     log("integration_skip_no_phone", { tenant_id: TENANT_ID, call_control_id: call.call_control_id });
     return;
