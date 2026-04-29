@@ -30,6 +30,7 @@ const fortnoxAuthRouter = require("./routes/fortnox-auth");
 const suggestionsRouter = require("./routes/suggestions");
 const incidentsRouter = require("./routes/incidents");
 const voicemailRouter = require("./routes/voicemail");
+const casesRouter = require("./routes/cases");
 
 const app = express();
 app.use(express.json());
@@ -67,6 +68,7 @@ app.use("/fortnox", fortnoxAuthRouter);
 app.use("/suggestions", suggestionsRouter);
 app.use("/incidents", incidentsRouter);
 app.use("/voicemail", voicemailRouter);
+app.use("/cases", casesRouter);
 
 // ── 404 ──────────────────────────────────────────────────────────────────────
 app.use((req, res) => {
