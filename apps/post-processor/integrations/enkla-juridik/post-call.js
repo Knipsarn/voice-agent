@@ -37,7 +37,7 @@ function controlPlaneBase() {
   return process.env.CONTROL_PLANE_BASE_URL ||
     "https://control-plane-service-360579353014.europe-west1.run.app";
 }
-function controlPlaneKey() { return process.env.CONTROL_PLANE_API_KEY || ""; }
+function controlPlaneKey() { return (process.env.CONTROL_PLANE_API_KEY || "").trim(); }
 
 function postJson(path, body) {
   return new Promise((resolve, reject) => {
