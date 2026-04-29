@@ -40,8 +40,17 @@ app.use(express.json());
 // ── Auth middleware ──────────────────────────────────────────────────────────
 const API_KEY = process.env.CONTROL_PLANE_API_KEY?.trim();
 
+// Routes that third-party providers POST to without bearer auth.
+// These are still safe: each handler validates the payload shape, looks up
+// session/tenant context server-side, and refuses unknown requests.
+const PUBLIC_WEBHOOK_PATHS = new Set([
+  "/health",
+  "/sms/inbound",         // 46elks SMS inbound — no signing available
+  "/voicemail",           // PBX-router voicemail webhook
+]);
+
 app.use((req, res, next) => {
-  if (req.path === "/health") return next();
+  if (PUBLIC_WEBHOOK_PATHS.has(req.path)) return next();
 
   if (!API_KEY) {
     console.warn("[control-plane] WARNING — CONTROL_PLANE_API_KEY is not set. Running unauthenticated.");
