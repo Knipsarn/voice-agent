@@ -4,7 +4,7 @@ import Link from "next/link";
 
 import { authOptions } from "@/lib/auth-config";
 import { userScope } from "@/lib/tenant-map";
-import { listCalls, getTenant } from "@/lib/control-plane";
+import { listCalls, getTenant, listVoicemails } from "@/lib/control-plane";
 import { priceForCall, marginForCall } from "@/lib/pricing";
 import { AppShell } from "../components/AppShell";
 import { Icon } from "../components/Icon";
@@ -39,15 +39,13 @@ export default async function CallsPage({ searchParams }) {
     redirect("/admin");
   }
 
-  const [data, tenantDoc] = await Promise.all([
-    listCalls({
-      tenantId: tenantFilter,
-      limit: 50,
-      includeCosts: scope.admin,
-    }).catch(() => ({ calls: [] })),
+  const [data, tenantDoc, vmData] = await Promise.all([
+    listCalls({ tenantId: tenantFilter, limit: 50, includeCosts: scope.admin }).catch(() => ({ calls: [] })),
     tenantFilter ? getTenant(tenantFilter).catch(() => null) : null,
+    tenantFilter ? listVoicemails(tenantFilter).catch(() => ({ voicemails: [] })) : Promise.resolve({ voicemails: [] }),
   ]);
   const calls = data.calls || [];
+  const voicemails = vmData.voicemails || [];
   const tenantName = tenantDoc?.company_name || tenantFilter;
 
   return (
@@ -59,7 +57,9 @@ export default async function CallsPage({ searchParams }) {
             <h1 className="text-4xl font-semibold text-ink tracking-tightest mt-2">
               {scope.admin ? "All calls" : "Samtal"}
             </h1>
-            <p className="text-sm text-muted mt-1">{calls.length} senaste samtalen</p>
+            <p className="text-sm text-muted mt-1">
+              {calls.length} senaste samtalen{voicemails.length > 0 && ` · ${voicemails.filter(v => !v.read).length} olästa röstmeddelanden`}
+            </p>
           </div>
         </header>
 
@@ -69,6 +69,35 @@ export default async function CallsPage({ searchParams }) {
           <AdminTable calls={calls} />
         ) : (
           <CustomerList calls={calls} />
+        )}
+
+        {voicemails.length > 0 && (
+          <section className="mt-10">
+            <h2 className="text-xs uppercase tracking-widest text-muted font-semibold mb-4">Röstmeddelanden</h2>
+            <div className="bg-surface border border-line rounded-lg overflow-hidden">
+              {voicemails.map((vm) => (
+                <div key={vm.id} className={`flex items-start gap-4 px-5 py-4 border-b border-line last:border-b-0 ${!vm.read ? "bg-accent-soft/20" : ""}`}>
+                  <div className="flex-shrink-0 mt-1 text-accent">
+                    <Icon name="speaker" size={16} />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-baseline justify-between gap-3 mb-1">
+                      <span className="font-semibold text-ink mono text-sm">{vm.caller}</span>
+                      <span className="text-xs text-subtle tabular">{vm.timestamp ? new Date(vm.timestamp).toLocaleString("sv-SE", { dateStyle: "short", timeStyle: "short" }) : "—"}</span>
+                    </div>
+                    {vm.duration_seconds && <span className="text-xs text-subtle">{vm.duration_seconds}s · </span>}
+                    <p className="text-sm text-ink leading-relaxed mt-1">{vm.transcript || "(ingen transkription)"}</p>
+                    {vm.recording_url && (
+                      <a href={vm.recording_url} target="_blank" rel="noopener noreferrer" className="text-xs text-accent hover:underline mt-1 inline-block">
+                        Lyssna på inspelning →
+                      </a>
+                    )}
+                    {!vm.read && <span className="ml-2 text-[10px] text-accent uppercase tracking-wider font-semibold">Ny</span>}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </section>
         )}
       </div>
     </AppShell>

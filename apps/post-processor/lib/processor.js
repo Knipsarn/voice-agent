@@ -11,6 +11,7 @@ const crypto = require("crypto");
 const { log, logError } = require("./log");
 const { summarize } = require("./summarizer");
 const { calculateCallCost } = require("./costs");
+const { sendCallSummaryEmail } = require("./mailer");
 
 const COLLECTION = "call_sessions";
 
@@ -79,6 +80,11 @@ async function processOne(callControlId, { force = false } = {}) {
     outcome: result.summary.outcome,
     cost_total_sek: costs.cost_total_sek,
   });
+
+  // Send post-call email (best-effort — never blocks or fails the processor)
+  sendCallSummaryEmail({ ...data, call_control_id: callControlId }, result.summary)
+    .then((r) => { if (r.sent) log("email_sent", { trace_id: traceId, to: r.to }); })
+    .catch((err) => logError("email_failed", { trace_id: traceId, error: err.message }));
 
   return { ok: true, summary: result.summary, costs };
 }

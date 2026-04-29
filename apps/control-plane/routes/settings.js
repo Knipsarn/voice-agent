@@ -46,7 +46,12 @@ router.post("/:tenantId", async (req, res) => {
   try {
     const body = req.body || {};
     // Whitelist fields to prevent arbitrary writes
-    const ALLOWED = ["summary_email", "summary_email_mode", "authorized_customer_emails", "fortnox_customer_number", "first_message"];
+    const ALLOWED = [
+      "summary_email", "summary_email_mode", "authorized_customer_emails",
+      "fortnox_customer_number", "first_message",
+      "business_hours",      // { enabled, timezone, schedule: { mon: {open,close}|null, ... } }
+      "notification_email",  // email for urgent-call alerts
+    ];
     const update = {};
     for (const k of ALLOWED) {
       if (k in body) update[k] = body[k];

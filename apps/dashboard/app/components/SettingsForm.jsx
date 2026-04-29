@@ -1,9 +1,23 @@
 "use client";
 import { useState, useEffect } from "react";
 
+const DAYS = [
+  { key: "mon", label: "Måndag" }, { key: "tue", label: "Tisdag" }, { key: "wed", label: "Onsdag" },
+  { key: "thu", label: "Torsdag" }, { key: "fri", label: "Fredag" },
+  { key: "sat", label: "Lördag" }, { key: "sun", label: "Söndag" },
+];
+
+function defaultBH() {
+  return {
+    enabled: false, timezone: "Europe/Stockholm",
+    schedule: { mon: { open: "08:00", close: "17:00" }, tue: { open: "08:00", close: "17:00" }, wed: { open: "08:00", close: "17:00" }, thu: { open: "08:00", close: "17:00" }, fri: { open: "08:00", close: "17:00" }, sat: null, sun: null },
+  };
+}
+
 export function SettingsForm({ tenantId, initialSettings, isAdmin, fortnoxConnected }) {
   const [summaryEmail, setSummaryEmail] = useState(initialSettings.summary_email || "");
   const [mode, setMode] = useState(initialSettings.summary_email_mode || "per_call");
+  const [bh, setBh] = useState(initialSettings.business_hours || defaultBH());
   const [authorizedEmails, setAuthorizedEmails] = useState(
     (initialSettings.authorized_customer_emails || []).join(", "),
   );
@@ -70,6 +84,7 @@ export function SettingsForm({ tenantId, initialSettings, isAdmin, fortnoxConnec
       const partial = {
         summary_email: summaryEmail || null,
         summary_email_mode: mode,
+        business_hours: bh,
       };
       if (isAdmin) {
         partial.authorized_customer_emails = authorizedEmails
@@ -243,6 +258,52 @@ export function SettingsForm({ tenantId, initialSettings, isAdmin, fortnoxConnec
           </div>
         </>
       )}
+
+      {/* Business hours */}
+      <div className="pt-2 border-t border-line">
+        <div className="flex items-center justify-between mb-3">
+          <div>
+            <label className="text-sm font-medium text-ink">Öppettider</label>
+            <p className="text-xs text-muted mt-0.5">Agenten informerar uppringare utanför dessa tider om att ni är stängda.</p>
+          </div>
+          <button
+            type="button"
+            onClick={() => setBh(p => ({ ...p, enabled: !p.enabled }))}
+            className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${bh.enabled ? "bg-accent" : "bg-line"}`}
+          >
+            <span className={`inline-block h-3.5 w-3.5 rounded-full bg-white transition-transform ${bh.enabled ? "translate-x-4" : "translate-x-1"}`} />
+          </button>
+        </div>
+        {bh.enabled && (
+          <div className="space-y-2 pl-1">
+            {DAYS.map(({ key, label }) => {
+              const on = !!bh.schedule?.[key];
+              return (
+                <div key={key} className="flex items-center gap-3 text-sm">
+                  <button type="button" onClick={() => setBh(p => ({ ...p, schedule: { ...p.schedule, [key]: on ? null : { open: "08:00", close: "17:00" } } }))}
+                    className={`w-4 h-4 rounded border flex items-center justify-center flex-shrink-0 ${on ? "bg-accent border-accent text-white" : "border-line"}`}>
+                    {on && <svg width="9" height="9" viewBox="0 0 12 12"><path d="M2 6l3 3 5-5" stroke="currentColor" strokeWidth="2" fill="none" strokeLinecap="round"/></svg>}
+                  </button>
+                  <span className="w-20 text-ink">{label}</span>
+                  {on ? (
+                    <div className="flex items-center gap-1.5 text-xs">
+                      <input type="time" value={bh.schedule[key]?.open || "08:00"}
+                        onChange={e => setBh(p => ({ ...p, schedule: { ...p.schedule, [key]: { ...p.schedule[key], open: e.target.value } } }))}
+                        className="border border-line rounded px-2 py-1 mono focus:outline-none focus:border-accent" />
+                      <span className="text-muted">–</span>
+                      <input type="time" value={bh.schedule[key]?.close || "17:00"}
+                        onChange={e => setBh(p => ({ ...p, schedule: { ...p.schedule, [key]: { ...p.schedule[key], close: e.target.value } } }))}
+                        className="border border-line rounded px-2 py-1 mono focus:outline-none focus:border-accent" />
+                    </div>
+                  ) : (
+                    <span className="text-xs text-subtle italic">Stängt</span>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
 
       <div className="flex items-center justify-between pt-2 border-t border-line">
         <div className="text-xs text-muted">

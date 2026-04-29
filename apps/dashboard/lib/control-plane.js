@@ -129,3 +129,12 @@ export async function listIncidents({ status, service, since, limit = 50 } = {})
 export async function updateIncident(id, partial) {
   return cpJson("POST", `/incidents/${encodeURIComponent(id)}`, partial);
 }
+
+
+export async function listVoicemails(tenantId, { limit = 50 } = {}) {
+  return cpGet(`/voicemail/${encodeURIComponent(tenantId)}?limit=${limit}`);
+}
+
+export async function markVoicemailRead(id, by) {
+  return cpJson("POST", `/voicemail/${encodeURIComponent(id)}/read`, { by });
+}

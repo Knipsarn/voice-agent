@@ -50,6 +50,31 @@ function getFirestore() {
   }
 }
 
+const DAY_KEYS = ["sun", "mon", "tue", "wed", "thu", "fri", "sat"];
+
+function getBusinessHoursNotice(bh) {
+  try {
+    const tz = bh.timezone || "Europe/Stockholm";
+    const now = new Date();
+    const parts = new Intl.DateTimeFormat("sv-SE", {
+      timeZone: tz, hour: "2-digit", minute: "2-digit", weekday: "short",
+    }).formatToParts(now);
+    const dayAbbr = parts.find(p => p.type === "weekday")?.value?.toLowerCase()?.slice(0, 3);
+    const timeStr = `${parts.find(p => p.type === "hour")?.value}:${parts.find(p => p.type === "minute")?.value}`;
+    const dayKey = DAY_KEYS.find(d => dayAbbr?.startsWith(d.slice(0, 2))) || DAY_KEYS[now.getDay()];
+    const hours = bh.schedule?.[dayKey];
+    if (!hours) {
+      return `OBS: Det är nu stängt (${dayKey} är stängt). Informera uppringaren vänligt om att vi är stängda idag och be dem ringa tillbaka under öppettiderna.`;
+    }
+    if (timeStr < hours.open || timeStr >= hours.close) {
+      return `OBS: Det är nu utanför öppettiderna (kl ${timeStr}, öppet ${hours.open}–${hours.close}). Informera uppringaren vänligt och erbjud att de kan ringa tillbaka under öppettiderna eller lämna ett meddelande.`;
+    }
+    return null; // within hours
+  } catch {
+    return null;
+  }
+}
+
 async function applyTenantSettingsOverrides(tenantId, config) {
   const db = getFirestore();
   if (!db) return config;
@@ -62,6 +87,24 @@ async function applyTenantSettingsOverrides(tenantId, config) {
       out.first_message = overrides.first_message;
       out._overrides = { ...(out._overrides || {}), first_message: true };
     }
+
+    // Business hours: if enabled and currently outside hours, prepend a closed notice
+    if (overrides.business_hours?.enabled) {
+      const closedNotice = getBusinessHoursNotice(overrides.business_hours);
+      if (closedNotice) {
+        out._business_hours_closed = true;
+        out._business_hours_notice = closedNotice;
+        // Prepend to instructions so the agent knows it's closed
+        if (out.instructions) {
+          if (typeof out.instructions === "string") {
+            out.instructions = `${closedNotice}\n\n${out.instructions}`;
+          } else if (out.instructions.base) {
+            out.instructions = { ...out.instructions, base: `${closedNotice}\n\n${out.instructions.base}` };
+          }
+        }
+      }
+    }
+
     return out;
   } catch (err) {
     console.warn(`[tenantLoader] Failed to apply tenant_settings override for ${tenantId}: ${err.message}`);
