@@ -7,6 +7,7 @@ RUN npm install --omit=dev
 
 COPY apps/post-processor/index.js ./
 COPY apps/post-processor/lib ./lib
+COPY apps/post-processor/integrations ./integrations
 
 EXPOSE 8080
 CMD ["node", "index.js"]

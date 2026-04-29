@@ -12,6 +12,7 @@ const { log, logError } = require("./log");
 const { summarize } = require("./summarizer");
 const { calculateCallCost } = require("./costs");
 const { sendCallSummaryEmail } = require("./mailer");
+const { runTenantIntegration } = require("../integrations");
 
 const COLLECTION = "call_sessions";
 
@@ -85,6 +86,12 @@ async function processOne(callControlId, { force = false } = {}) {
   sendCallSummaryEmail({ ...data, call_control_id: callControlId }, result.summary)
     .then((r) => { if (r.sent) log("email_sent", { trace_id: traceId, to: r.to }); })
     .catch((err) => logError("email_failed", { trace_id: traceId, error: err.message }));
+
+  // Run per-tenant post-call integration (best-effort)
+  runTenantIntegration(data.tenant_id, {
+    call: { ...data, call_control_id: callControlId },
+    summary: result.summary,
+  }).catch((err) => logError("integration_uncaught", { trace_id: traceId, tenant_id: data.tenant_id, error: err.message }));
 
   return { ok: true, summary: result.summary, costs };
 }
