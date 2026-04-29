@@ -49,8 +49,13 @@ router.post("/:tenantId", async (req, res) => {
     const ALLOWED = [
       "summary_email", "summary_email_mode", "authorized_customer_emails",
       "fortnox_customer_number", "first_message",
-      "business_hours",      // { enabled, timezone, schedule: { mon: {open,close}|null, ... } }
-      "notification_email",  // email for urgent-call alerts
+      "business_hours",                  // { enabled, timezone, schedule: { mon: {open,close}|null, ... } }
+      "notification_email",              // email for urgent-call alerts
+      "sms_specialist_title",            // e.g. "jurist", "tandläkare" — inserted into SMS templates
+      "sms_contact_email",               // support email shown in fallback SMS
+      "sms_post_call_message",           // outbound SMS sent after each call
+      "sms_fallback_needs_info",         // reply when customer sends non-contact text (no email on file)
+      "sms_fallback_already_processed",  // reply when customer sends non-contact text (email known)
     ];
     const update = {};
     for (const k of ALLOWED) {
