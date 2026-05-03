@@ -6,9 +6,11 @@ import { useState } from "react";
 import { Icon } from "./Icon";
 import { SuggestionPanel } from "./SuggestionPanel";
 
-const TENANT_NAV = [
+// CRM-style tenants get "Ärenden" instead of "Samtal" in their nav.
+const CRM_TENANTS = new Set(["enkla-juridik"]);
+const TENANT_NAV = (tenantId) => [
   { href: "/", label: "Översikt", icon: "home" },
-  { href: "/calls", label: "Samtal", icon: "phone" },
+  { href: "/calls", label: CRM_TENANTS.has(tenantId) ? "Ärenden" : "Samtal", icon: CRM_TENANTS.has(tenantId) ? "users" : "phone" },
   { href: "/agent", label: "Min assistent", icon: "mic" },
   { href: "/settings", label: "Inställningar", icon: "settings" },
 ];
@@ -22,7 +24,7 @@ const ADMIN_NAV = [
 
 const ADMIN_TENANT_NAV = (tenant) => [
   { href: `/?tenant=${tenant}`, label: "Overview", icon: "home" },
-  { href: `/calls?tenant=${tenant}`, label: "Calls", icon: "phone" },
+  { href: `/calls?tenant=${tenant}`, label: CRM_TENANTS.has(tenant) ? "Cases" : "Calls", icon: CRM_TENANTS.has(tenant) ? "users" : "phone" },
   { href: `/agent?tenant=${tenant}`, label: "Agent", icon: "mic" },
   { href: `/settings?tenant=${tenant}`, label: "Settings", icon: "settings" },
   { href: `/billing?tenant=${tenant}`, label: "Billing", icon: "chart" },
@@ -37,8 +39,7 @@ export function Sidebar({ email, admin, tenantId, tenantName, impersonating }) {
   let nav;
   let context;
   if (impersonating) {
-    // Admin in customer-view mode: show the tenant nav (no admin-only links)
-    nav = TENANT_NAV;
+    nav = TENANT_NAV(tenantId);
     context = { kind: "tenant", tenantId, tenantName };
   } else if (admin && tenantId) {
     nav = ADMIN_TENANT_NAV(tenantId);
@@ -47,7 +48,7 @@ export function Sidebar({ email, admin, tenantId, tenantName, impersonating }) {
     nav = ADMIN_NAV;
     context = { kind: "admin" };
   } else {
-    nav = TENANT_NAV;
+    nav = TENANT_NAV(tenantId);
     context = { kind: "tenant", tenantId, tenantName };
   }
 

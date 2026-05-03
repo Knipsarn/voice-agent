@@ -131,6 +131,28 @@ export async function updateIncident(id, partial) {
 }
 
 
+export async function listCases(tenantId, { active, limit = 100 } = {}) {
+  const params = new URLSearchParams();
+  params.set("tenant_id", tenantId);
+  if (active === true)  params.set("active", "true");
+  if (active === false) params.set("active", "false");
+  params.set("limit", String(limit));
+  return cpGet(`/cases?${params.toString()}`);
+}
+
+export async function getCase(caseId) {
+  return cpGet(`/cases/${encodeURIComponent(caseId)}`);
+}
+
+export async function listSms(tenantId, { caseId, status, limit = 50 } = {}) {
+  const params = new URLSearchParams();
+  params.set("tenant_id", tenantId);
+  if (caseId) params.set("case_id", caseId);
+  if (status) params.set("status", status);
+  params.set("limit", String(limit));
+  return cpGet(`/sms?${params.toString()}`);
+}
+
 export async function listVoicemails(tenantId, { limit = 50 } = {}) {
   return cpGet(`/voicemail/${encodeURIComponent(tenantId)}?limit=${limit}`);
 }
