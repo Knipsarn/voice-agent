@@ -70,6 +70,14 @@ export default async function AgentPage({ searchParams }) {
           </p>
         </header>
 
+        {/* Test your assistant callout */}
+        {numbers.length > 0 && (
+          <TestYourAI
+            number={numbers[0].e164}
+            voice={tenant.voice}
+          />
+        )}
+
         {/* Greeting editor — customer-editable */}
         <GreetingEditor
           tenantId={tenantId}
@@ -163,6 +171,41 @@ export default async function AgentPage({ searchParams }) {
         )}
       </div>
     </AppShell>
+  );
+}
+
+// "Testa din AI" hero callout. For now this is a click-to-dial — works on mobile,
+// shows the number prominently on desktop. Future: a server-initiated outbound
+// call via Telnyx (POST /v2/calls with client_state="test:<tenant>") would let
+// the dashboard call the customer back, but requires telephony-service to handle
+// outbound webhooks and route by client_state instead of destination number.
+function TestYourAI({ number, voice }) {
+  const formatted = number?.replace(/^\+46/, "0").replace(/(\d{2,3})(?=\d{6,})/, "$1-").replace(/(\d{2})(\d{2})(\d{2})$/, "$1 $2 $3");
+  return (
+    <section className="bg-gradient-to-br from-accent-soft to-surface border border-accent/20 rounded-lg p-6">
+      <div className="flex items-start gap-4">
+        <div className="w-10 h-10 rounded-lg bg-accent/15 text-accent flex items-center justify-center flex-shrink-0">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.8 19.8 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.8 19.8 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.13 1 .37 1.96.72 2.87a2 2 0 0 1-.45 2.11L8.09 9.9a16 16 0 0 0 6 6l1.2-1.29a2 2 0 0 1 2.11-.45c.91.35 1.87.59 2.87.72A2 2 0 0 1 22 16.92z" />
+          </svg>
+        </div>
+        <div className="flex-1 min-w-0">
+          <h2 className="text-base font-semibold text-ink tracking-tight">Testa din assistent</h2>
+          <p className="text-sm text-muted mt-1">
+            Ring detta nummer från en valfri telefon för att höra hur din AI {voice ? `(röst: ${voice}) ` : ""}svarar i ett riktigt samtal.
+          </p>
+          <a
+            href={`tel:${number}`}
+            className="inline-flex items-center gap-2 mt-4 bg-ink text-white font-semibold px-4 py-2.5 rounded-lg text-sm hover:bg-ink/85 transition-colors mono tabular"
+          >
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.8 19.8 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.8 19.8 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.13 1 .37 1.96.72 2.87a2 2 0 0 1-.45 2.11L8.09 9.9a16 16 0 0 0 6 6l1.2-1.29a2 2 0 0 1 2.11-.45c.91.35 1.87.59 2.87.72A2 2 0 0 1 22 16.92z" />
+            </svg>
+            {formatted || number}
+          </a>
+        </div>
+      </div>
+    </section>
   );
 }
 
