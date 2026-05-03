@@ -6,7 +6,6 @@ import { effectiveScope } from "@/lib/tenant-map";
 import { getSettings, getFortnoxStatus, getTenant, listCalls } from "@/lib/control-plane";
 import { AppShell } from "../components/AppShell";
 import { SettingsForm } from "../components/SettingsForm";
-import { GreetingEditor } from "../components/GreetingEditor";
 import { RATES } from "@/lib/pricing";
 
 const STATIC_MONTHLY_SEK = parseFloat(process.env.STATIC_MONTHLY_FEE_SEK || "1000");
@@ -98,14 +97,6 @@ export default async function SettingsPage({ searchParams }) {
             </p>
           </section>
         )}
-
-        {/* Greeting */}
-        <GreetingEditor
-          tenantId={tenantId}
-          initialGreeting={settings?.first_message ?? tenantDoc?.first_message ?? ""}
-          fallbackGreeting={tenantDoc?.first_message ?? ""}
-          isOverride={!!settings?.first_message}
-        />
 
         {/* Settings form */}
         <SettingsForm
