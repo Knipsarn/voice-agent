@@ -1,0 +1,9 @@
+{
+  "sms_specialist_title": "jurist",
+  "sms_contact_email": "info@enkla-juridik.se",
+  "sms_post_call_message": "Hej! Tack för att du kontaktade Enkla Juridik. För att en jurist ska kunna kontakta dig, svara med dina uppgifter:\nNamn, din@email.se, Stad",
+  "sms_fallback_needs_info": "Det här är enbart för kontaktuppgifter. Svara med ditt namn, e-postadress och ort så att en jurist kan kontakta dig.",
+  "sms_fallback_already_processed": "Det här är enbart för kontaktuppgifter. Vi har redan tagit emot dina uppgifter och en jurist hör av sig inom 48 timmar. Kontakta oss på info@enkla-juridik.se för frågor och support.",
+  "sms_reminder_1_message": "Hej! Vi väntar fortfarande på dina kontaktuppgifter för att en jurist ska kunna kontakta dig. Svara med:\nNamn, din@email.se, Stad",
+  "sms_reminder_2_message": "Sista påminnelse: Svara med ditt namn, din e-postadress och stad så att en jurist kan kontakta dig. Annars hör vi inte av oss."
+}
