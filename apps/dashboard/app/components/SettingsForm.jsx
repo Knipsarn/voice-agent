@@ -5,7 +5,7 @@ import { useState, useEffect } from "react";
 // Swedish chars (å ä ö) stay in GSM-7 (Latin-1). Only codepoints >0xFF → UCS-2.
 function countSegments(text) {
   if (!text) return 0;
-  const isUnicode = /[^ -ÿ]/u.test(text);
+  const isUnicode = /[^\n\r -ÿ]/u.test(text);
   const single = isUnicode ? 70 : 160;
   const multi  = isUnicode ? 67 : 153;
   if (text.length <= single) return 1;
