@@ -9,7 +9,7 @@ const { WebSocketServer, WebSocket } = require("ws");
 const url = require("url");
 const crypto = require("crypto");
 
-const { loadTenant, buildInstructions, buildWorkflowInstructions, generateWorkflowTools, isWorkflowEnabled } = require("./tenantLoader");
+const { loadTenant, buildInstructions, buildWorkflowInstructions, generateWorkflowTools, isWorkflowEnabled, fetchPriorCaseContext } = require("./tenantLoader");
 const { writeBridgeData: writeCallSessionBridgeData } = require("./lib/callSessions");
 
 // ─── Structured logging ───────────────────────────────────────────────────────
@@ -204,6 +204,13 @@ wss.on("connection", async (phoneWs, req) => {
   // Only append end_call instructions for leaf modes (not routing or phone_transfer)
   if (initialModeType === "leaf") {
     instructions += END_CALL_ADDENDUM;
+  }
+
+  // Inject prior call context if this caller has a case on file for this tenant.
+  // Gives the agent awareness of previous calls without manual memory management.
+  if (!fallback && callerNumber) {
+    const priorContext = await fetchPriorCaseContext(callerNumber, tenantId);
+    if (priorContext) instructions += priorContext;
   }
 
   const voice = tenantConfig?.voice || DEFAULT_VOICE;

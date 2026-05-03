@@ -209,4 +209,49 @@ function isWorkflowEnabled(tenantConfig) {
   return !!tenantConfig?.workflow?.enabled;
 }
 
-module.exports = { loadTenant, buildInstructions, buildWorkflowInstructions, generateWorkflowTools, isWorkflowEnabled };
+/**
+ * Fetch the most recent case summary for a caller, to inject as prior context.
+ * Returns a formatted instruction block string, or null if nothing found.
+ * Never throws — a DB failure must never abort a live call.
+ *
+ * @param {string} callerNumber  E.164 phone number
+ * @param {string} tenantId
+ * @returns {Promise<string|null>}
+ */
+async function fetchPriorCaseContext(callerNumber, tenantId) {
+  if (!callerNumber || !tenantId) return null;
+  const db = getFirestore();
+  if (!db) return null;
+  try {
+    const snap = await db.collection("cases")
+      .where("tenant_id", "==", tenantId)
+      .where("phone", "==", callerNumber)
+      .orderBy("createdAt", "desc")
+      .limit(1)
+      .get();
+    if (snap.empty) return null;
+    const c = snap.docs[0].data();
+    if (!c.summary) return null;
+
+    // Take up to the last 2 call blocks (separated by ---\nSamtal)
+    const blocks = c.summary.split(/\n\n---\n/).filter(Boolean);
+    const excerpt = blocks.slice(-2).join("\n\n---\n");
+
+    const statusNote =
+      c.status === "SENT"  ? "Ärendet är redan skickat till en jurist." :
+      c.status === "READY" ? "Ärendet är registrerat och väntar på att skickas till en jurist." :
+                             "Vi väntar fortfarande på kontaktuppgifter från personen.";
+
+    return (
+      "\n\n## Samtalshistorik\n" +
+      `Den här personen har ringt tidigare. ${statusNote}\n\n` +
+      `Sammanfattning av tidigare samtal:\n${excerpt}\n\n` +
+      "Undvik att ställa frågor som redan besvarats. Om personen ringer om samma ärende, " +
+      "bekräfta vad du vet och fråga om det är något nytt."
+    );
+  } catch {
+    return null;
+  }
+}
+
+module.exports = { loadTenant, buildInstructions, buildWorkflowInstructions, generateWorkflowTools, isWorkflowEnabled, fetchPriorCaseContext };
