@@ -19,11 +19,15 @@ export async function POST(req) {
     return Response.json({ error: "not your tenant" }, { status: 403 });
   }
 
-  // Customers can edit summary_email, summary_email_mode + their own greeting (first_message)
-  // Admins can also edit authorized_customer_emails + fortnox_customer_number
+  // Fields any authenticated customer can edit (their own tenant)
+  const SMS_FIELDS = [
+    "sms_specialist_title", "sms_contact_email",
+    "sms_post_call_message", "sms_reminder_1_message", "sms_reminder_2_message",
+  ];
   const allowed = scope.admin
-    ? ["summary_email", "summary_email_mode", "authorized_customer_emails", "fortnox_customer_number", "first_message"]
-    : ["summary_email", "summary_email_mode", "first_message"];
+    ? ["summary_email", "summary_email_mode", "authorized_customer_emails", "fortnox_customer_number",
+       "first_message", "business_hours", ...SMS_FIELDS]
+    : ["summary_email", "summary_email_mode", "first_message", "business_hours", ...SMS_FIELDS];
   const partial = {};
   for (const k of allowed) if (k in rest) partial[k] = rest[k];
 

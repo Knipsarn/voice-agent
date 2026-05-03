@@ -1,6 +1,44 @@
 "use client";
 import { useState, useEffect } from "react";
 
+// Client-side SMS segment counter — mirrors server logic in routes/sms.js
+// Swedish chars (å ä ö) stay in GSM-7 (Latin-1). Only codepoints >0xFF → UCS-2.
+function countSegments(text) {
+  if (!text) return 0;
+  const isUnicode = /[^ -ÿ]/u.test(text);
+  const single = isUnicode ? 70 : 160;
+  const multi  = isUnicode ? 67 : 153;
+  if (text.length <= single) return 1;
+  return Math.ceil(text.length / multi);
+}
+const SEK_PER_SEGMENT = 3.50;
+
+function SmsMessageField({ label, hint, value, onChange }) {
+  const segments = countSegments(value);
+  const cost = (segments * SEK_PER_SEGMENT).toFixed(2);
+  const len = value.length;
+
+  return (
+    <div>
+      <div className="flex items-baseline justify-between mb-1">
+        <label className="text-xs font-medium text-ink">{label}</label>
+        {len > 0 && (
+          <span className="text-[10px] tabular text-muted">
+            {len} tecken · {segments} {segments === 1 ? "segment" : "segment"} · {cost} kr/SMS
+          </span>
+        )}
+      </div>
+      <textarea
+        rows={3}
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        className="w-full border border-line rounded-md px-3 py-2.5 text-sm focus:outline-none focus:border-accent resize-none leading-relaxed"
+      />
+      <p className="text-xs text-muted mt-1">{hint}</p>
+    </div>
+  );
+}
+
 const DAYS = [
   { key: "mon", label: "Måndag" }, { key: "tue", label: "Tisdag" }, { key: "wed", label: "Onsdag" },
   { key: "thu", label: "Torsdag" }, { key: "fri", label: "Fredag" },
@@ -24,6 +62,12 @@ export function SettingsForm({ tenantId, initialSettings, isAdmin, fortnoxConnec
   const [fortnoxCustomerNumber, setFortnoxCustomerNumber] = useState(
     initialSettings.fortnox_customer_number || "",
   );
+  const [smsSpecialist, setSmsSpecialist]   = useState(initialSettings.sms_specialist_title || "");
+  const [smsEmail, setSmsEmail]             = useState(initialSettings.sms_contact_email    || "");
+  const [smsPostCall, setSmsPostCall]       = useState(initialSettings.sms_post_call_message    || "");
+  const [smsReminder1, setSmsReminder1]     = useState(initialSettings.sms_reminder_1_message   || "");
+  const [smsReminder2, setSmsReminder2]     = useState(initialSettings.sms_reminder_2_message   || "");
+
   const [saving, setSaving] = useState(false);
   const [savedAt, setSavedAt] = useState(null);
   const [error, setError] = useState(null);
@@ -85,6 +129,11 @@ export function SettingsForm({ tenantId, initialSettings, isAdmin, fortnoxConnec
         summary_email: summaryEmail || null,
         summary_email_mode: mode,
         business_hours: bh,
+        sms_specialist_title:    smsSpecialist.trim()  || null,
+        sms_contact_email:       smsEmail.trim()       || null,
+        sms_post_call_message:   smsPostCall.trim()    || null,
+        sms_reminder_1_message:  smsReminder1.trim()   || null,
+        sms_reminder_2_message:  smsReminder2.trim()   || null,
       };
       if (isAdmin) {
         partial.authorized_customer_emails = authorizedEmails
@@ -303,6 +352,60 @@ export function SettingsForm({ tenantId, initialSettings, isAdmin, fortnoxConnec
             })}
           </div>
         )}
+      </div>
+
+      {/* SMS follow-up messages */}
+      <div className="pt-2 border-t border-line space-y-5">
+        <div>
+          <h3 className="text-sm font-medium text-ink">SMS-uppföljning</h3>
+          <p className="text-xs text-muted mt-0.5">
+            Meddelanden som skickas till uppringare efter samtalet. Längden påverkar priset — varje segment kostar {SEK_PER_SEGMENT.toFixed(2)} kr.
+          </p>
+        </div>
+
+        <div className="grid grid-cols-2 gap-4">
+          <div>
+            <label className="block text-xs font-medium text-ink mb-1">Specialisttitel</label>
+            <input
+              type="text"
+              value={smsSpecialist}
+              onChange={(e) => setSmsSpecialist(e.target.value)}
+              placeholder="jurist, tandläkare…"
+              className="w-full border border-line rounded-md px-3 py-2 text-sm focus:outline-none focus:border-accent"
+            />
+            <p className="text-xs text-muted mt-1">Ersätter [specialist] i meddelandena.</p>
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-ink mb-1">Support-e-post</label>
+            <input
+              type="email"
+              value={smsEmail}
+              onChange={(e) => setSmsEmail(e.target.value)}
+              placeholder="info@företaget.se"
+              className="w-full border border-line rounded-md px-3 py-2 text-sm focus:outline-none focus:border-accent"
+            />
+            <p className="text-xs text-muted mt-1">Visas i fallback-meddelanden.</p>
+          </div>
+        </div>
+
+        <SmsMessageField
+          label="Meddelande direkt efter samtal"
+          hint="Skickas automatiskt när samtalet avslutas."
+          value={smsPostCall}
+          onChange={setSmsPostCall}
+        />
+        <SmsMessageField
+          label="Påminnelse 1"
+          hint="Skickas ~24h efter samtalets SMS om vi inte fått svar."
+          value={smsReminder1}
+          onChange={setSmsReminder1}
+        />
+        <SmsMessageField
+          label="Påminnelse 2 (sista)"
+          hint="Skickas ~24h efter påminnelse 1. Inga fler meddelanden skickas därefter."
+          value={smsReminder2}
+          onChange={setSmsReminder2}
+        />
       </div>
 
       <div className="flex items-center justify-between pt-2 border-t border-line">
