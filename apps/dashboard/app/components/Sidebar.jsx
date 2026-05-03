@@ -28,7 +28,7 @@ const ADMIN_TENANT_NAV = (tenant) => [
   { href: `/billing?tenant=${tenant}`, label: "Billing", icon: "chart" },
 ];
 
-export function Sidebar({ email, admin, tenantId, tenantName }) {
+export function Sidebar({ email, admin, tenantId, tenantName, impersonating }) {
   const pathname = usePathname();
   const [panelOpen, setPanelOpen] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
@@ -36,7 +36,11 @@ export function Sidebar({ email, admin, tenantId, tenantName }) {
   // Determine which nav to show
   let nav;
   let context;
-  if (admin && tenantId) {
+  if (impersonating) {
+    // Admin in customer-view mode: show the tenant nav (no admin-only links)
+    nav = TENANT_NAV;
+    context = { kind: "tenant", tenantId, tenantName };
+  } else if (admin && tenantId) {
     nav = ADMIN_TENANT_NAV(tenantId);
     context = { kind: "admin-tenant", tenantId, tenantName };
   } else if (admin) {
@@ -105,6 +109,13 @@ export function Sidebar({ email, admin, tenantId, tenantName }) {
                 <div className="text-[10px] text-subtle mono truncate">{tenantId}</div>
               </div>
             </div>
+            <Link
+              href={`/?tenant=${tenantId}&as=customer`}
+              className="mt-3 flex items-center justify-center gap-1.5 text-xs font-medium text-muted hover:text-ink border border-line rounded-md py-1.5 hover:bg-line-soft transition-colors"
+            >
+              <Icon name="users" size={12} />
+              Visa som kund
+            </Link>
           </div>
         )}
 

@@ -2,10 +2,11 @@ import { getServerSession } from "next-auth";
 import { redirect } from "next/navigation";
 
 import { authOptions } from "@/lib/auth-config";
-import { userScope } from "@/lib/tenant-map";
+import { effectiveScope } from "@/lib/tenant-map";
 import { getSettings, getFortnoxStatus, getTenant, listCalls } from "@/lib/control-plane";
 import { AppShell } from "../components/AppShell";
 import { SettingsForm } from "../components/SettingsForm";
+import { GreetingEditor } from "../components/GreetingEditor";
 import { RATES } from "@/lib/pricing";
 
 const STATIC_MONTHLY_SEK = parseFloat(process.env.STATIC_MONTHLY_FEE_SEK || "1000");
@@ -22,7 +23,7 @@ function startOfMonth(d = new Date()) {
 export default async function SettingsPage({ searchParams }) {
   const session = await getServerSession(authOptions);
   if (!session?.user?.email) redirect("/login");
-  const scope = userScope(session.user.email);
+  const scope = effectiveScope(session.user.email, searchParams);
   if (!scope.admin && !scope.tenantId) {
     return (
       <AppShell email={session.user.email} admin={false}>
@@ -62,7 +63,7 @@ export default async function SettingsPage({ searchParams }) {
   }
 
   return (
-    <AppShell email={session.user.email} admin={scope.admin} tenantId={tenantId} tenantName={tenantName}>
+    <AppShell email={session.user.email} admin={scope.admin} tenantId={tenantId} tenantName={tenantName} impersonating={scope._impersonating}>
       <div className="max-w-3xl mx-auto px-6 md:px-10 py-8 md:py-12 space-y-6">
         <header className="mb-2">
           <p className="text-xs uppercase tracking-widest text-muted font-semibold">{scope.admin ? "Settings" : "Inställningar"}</p>
@@ -97,6 +98,14 @@ export default async function SettingsPage({ searchParams }) {
             </p>
           </section>
         )}
+
+        {/* Greeting */}
+        <GreetingEditor
+          tenantId={tenantId}
+          initialGreeting={settings?.first_message ?? tenantDoc?.first_message ?? ""}
+          fallbackGreeting={tenantDoc?.first_message ?? ""}
+          isOverride={!!settings?.first_message}
+        />
 
         {/* Settings form */}
         <SettingsForm

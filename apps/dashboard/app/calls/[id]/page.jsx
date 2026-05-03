@@ -3,7 +3,7 @@ import { redirect } from "next/navigation";
 import Link from "next/link";
 
 import { authOptions } from "@/lib/auth-config";
-import { userScope } from "@/lib/tenant-map";
+import { effectiveScope } from "@/lib/tenant-map";
 import { getCall, getTenant } from "@/lib/control-plane";
 import { priceForCall, marginForCall } from "@/lib/pricing";
 import { AppShell } from "../../components/AppShell";
@@ -22,10 +22,10 @@ function formatDuration(ms) {
   return `${Math.floor(sec / 60)}m ${sec % 60}s`;
 }
 
-export default async function CallDetail({ params }) {
+export default async function CallDetail({ params, searchParams }) {
   const session = await getServerSession(authOptions);
   if (!session?.user?.email) redirect("/login");
-  const scope = userScope(session.user.email);
+  const scope = effectiveScope(session.user.email, searchParams);
 
   const id = decodeURIComponent(params.id);
   let call;
@@ -33,7 +33,7 @@ export default async function CallDetail({ params }) {
     call = await getCall(id);
   } catch (err) {
     return (
-      <AppShell email={session.user.email} admin={scope.admin} tenantId={scope.tenantId}>
+      <AppShell email={session.user.email} admin={scope.admin} tenantId={scope.tenantId} impersonating={scope._impersonating}>
         <div className="max-w-3xl mx-auto px-6 py-24 text-center">
           <div className="inline-flex items-center justify-center w-12 h-12 rounded-lg bg-line-soft text-subtle mb-3">
             <Icon name="alert" size={20} />
@@ -74,7 +74,7 @@ export default async function CallDetail({ params }) {
   const backHref = scope.admin ? `/calls?tenant=${encodeURIComponent(tenantId)}` : "/calls";
 
   return (
-    <AppShell email={session.user.email} admin={scope.admin} tenantId={tenantId} tenantName={tenantName}>
+    <AppShell email={session.user.email} admin={scope.admin} tenantId={tenantId} tenantName={tenantName} impersonating={scope._impersonating}>
       <div className="max-w-4xl mx-auto px-6 md:px-10 py-8 md:py-12 space-y-8">
         {/* Back nav */}
         <Link href={backHref} className="inline-flex items-center gap-1.5 text-sm text-muted hover:text-ink transition-colors">

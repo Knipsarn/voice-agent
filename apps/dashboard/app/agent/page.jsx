@@ -2,7 +2,7 @@ import { getServerSession } from "next-auth";
 import { redirect } from "next/navigation";
 
 import { authOptions } from "@/lib/auth-config";
-import { userScope } from "@/lib/tenant-map";
+import { effectiveScope } from "@/lib/tenant-map";
 import { getTenant, listNumbersForTenant, getSettings } from "@/lib/control-plane";
 import { AppShell } from "../components/AppShell";
 import { Icon } from "../components/Icon";
@@ -16,7 +16,7 @@ function pickTenantId(scope, searchParams) {
 export default async function AgentPage({ searchParams }) {
   const session = await getServerSession(authOptions);
   if (!session?.user?.email) redirect("/login");
-  const scope = userScope(session.user.email);
+  const scope = effectiveScope(session.user.email, searchParams);
 
   if (!scope.admin && !scope.tenantId) {
     return (
@@ -40,7 +40,7 @@ export default async function AgentPage({ searchParams }) {
     ]);
   } catch (err) {
     return (
-      <AppShell email={session.user.email} admin={scope.admin} tenantId={tenantId}>
+      <AppShell email={session.user.email} admin={scope.admin} tenantId={tenantId} impersonating={scope._impersonating}>
         <div className="max-w-3xl mx-auto px-6 py-24 text-center text-muted">
           Kunde inte ladda assistenten: {err.message}
         </div>
@@ -58,7 +58,7 @@ export default async function AgentPage({ searchParams }) {
   const greetingValue = settings?.first_message ?? tenant.first_message ?? "";
 
   return (
-    <AppShell email={session.user.email} admin={scope.admin} tenantId={tenantId} tenantName={tenantName}>
+    <AppShell email={session.user.email} admin={scope.admin} tenantId={tenantId} tenantName={tenantName} impersonating={scope._impersonating}>
       <div className="max-w-4xl mx-auto px-6 md:px-10 py-8 md:py-12 space-y-6">
         <header className="mb-2">
           <p className="text-xs uppercase tracking-widest text-muted font-semibold">

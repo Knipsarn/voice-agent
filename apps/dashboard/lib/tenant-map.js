@@ -52,3 +52,18 @@ export function userScope(email) {
   if (tenantId) return { admin: false, tenantId };
   return { admin: false, tenantId: null }; // no access
 }
+
+/**
+ * Like userScope, but lets admins temporarily view the dashboard as a customer
+ * by adding ?as=customer&tenant=<id> to the URL. Returns _impersonating: true
+ * so the AppShell can show a banner with "back to admin" link.
+ */
+export function effectiveScope(email, searchParams) {
+  const real = userScope(email);
+  const wantsCustomerView = searchParams?.as === "customer";
+  const targetTenant = searchParams?.tenant;
+  if (real.admin && wantsCustomerView && targetTenant) {
+    return { admin: false, tenantId: targetTenant, _impersonating: true };
+  }
+  return real;
+}

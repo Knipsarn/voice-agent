@@ -52,6 +52,25 @@ function defaultBH() {
   };
 }
 
+const BH_TEMPLATES = {
+  weekdays_8_17: {
+    label: "Vardagar 8–17",
+    schedule: { mon: { open: "08:00", close: "17:00" }, tue: { open: "08:00", close: "17:00" }, wed: { open: "08:00", close: "17:00" }, thu: { open: "08:00", close: "17:00" }, fri: { open: "08:00", close: "17:00" }, sat: null, sun: null },
+  },
+  weekdays_8_20: {
+    label: "Vardagar 8–20",
+    schedule: { mon: { open: "08:00", close: "20:00" }, tue: { open: "08:00", close: "20:00" }, wed: { open: "08:00", close: "20:00" }, thu: { open: "08:00", close: "20:00" }, fri: { open: "08:00", close: "20:00" }, sat: null, sun: null },
+  },
+  every_day: {
+    label: "Alla dagar 9–18",
+    schedule: { mon: { open: "09:00", close: "18:00" }, tue: { open: "09:00", close: "18:00" }, wed: { open: "09:00", close: "18:00" }, thu: { open: "09:00", close: "18:00" }, fri: { open: "09:00", close: "18:00" }, sat: { open: "09:00", close: "18:00" }, sun: { open: "09:00", close: "18:00" } },
+  },
+  always_open: {
+    label: "Dygnet runt",
+    schedule: { mon: { open: "00:00", close: "23:59" }, tue: { open: "00:00", close: "23:59" }, wed: { open: "00:00", close: "23:59" }, thu: { open: "00:00", close: "23:59" }, fri: { open: "00:00", close: "23:59" }, sat: { open: "00:00", close: "23:59" }, sun: { open: "00:00", close: "23:59" } },
+  },
+};
+
 export function SettingsForm({ tenantId, initialSettings, isAdmin, fortnoxConnected }) {
   const [summaryEmail, setSummaryEmail] = useState(initialSettings.summary_email || "");
   const [mode, setMode] = useState(initialSettings.summary_email_mode || "per_call");
@@ -313,43 +332,72 @@ export function SettingsForm({ tenantId, initialSettings, isAdmin, fortnoxConnec
         <div className="flex items-center justify-between mb-3">
           <div>
             <label className="text-sm font-medium text-ink">Öppettider</label>
-            <p className="text-xs text-muted mt-0.5">Agenten informerar uppringare utanför dessa tider om att ni är stängda.</p>
+            <p className="text-xs text-muted mt-0.5">Utanför dessa tider hälsar assistenten och säger att ni är stängda.</p>
           </div>
           <button
             type="button"
             onClick={() => setBh(p => ({ ...p, enabled: !p.enabled }))}
             className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${bh.enabled ? "bg-accent" : "bg-line"}`}
+            aria-label="Aktivera öppettider"
           >
             <span className={`inline-block h-3.5 w-3.5 rounded-full bg-white transition-transform ${bh.enabled ? "translate-x-4" : "translate-x-1"}`} />
           </button>
         </div>
         {bh.enabled && (
-          <div className="space-y-2 pl-1">
-            {DAYS.map(({ key, label }) => {
-              const on = !!bh.schedule?.[key];
-              return (
-                <div key={key} className="flex items-center gap-3 text-sm">
-                  <button type="button" onClick={() => setBh(p => ({ ...p, schedule: { ...p.schedule, [key]: on ? null : { open: "08:00", close: "17:00" } } }))}
-                    className={`w-4 h-4 rounded border flex items-center justify-center flex-shrink-0 ${on ? "bg-accent border-accent text-white" : "border-line"}`}>
-                    {on && <svg width="9" height="9" viewBox="0 0 12 12"><path d="M2 6l3 3 5-5" stroke="currentColor" strokeWidth="2" fill="none" strokeLinecap="round"/></svg>}
-                  </button>
-                  <span className="w-20 text-ink">{label}</span>
-                  {on ? (
-                    <div className="flex items-center gap-1.5 text-xs">
-                      <input type="time" value={bh.schedule[key]?.open || "08:00"}
-                        onChange={e => setBh(p => ({ ...p, schedule: { ...p.schedule, [key]: { ...p.schedule[key], open: e.target.value } } }))}
-                        className="border border-line rounded px-2 py-1 mono focus:outline-none focus:border-accent" />
-                      <span className="text-muted">–</span>
-                      <input type="time" value={bh.schedule[key]?.close || "17:00"}
-                        onChange={e => setBh(p => ({ ...p, schedule: { ...p.schedule, [key]: { ...p.schedule[key], close: e.target.value } } }))}
-                        className="border border-line rounded px-2 py-1 mono focus:outline-none focus:border-accent" />
-                    </div>
-                  ) : (
-                    <span className="text-xs text-subtle italic">Stängt</span>
-                  )}
-                </div>
-              );
-            })}
+          <div className="space-y-3">
+            {/* Templates */}
+            <div className="flex flex-wrap gap-1.5">
+              <span className="text-[10px] uppercase tracking-widest text-muted font-semibold self-center mr-1">Snabbval:</span>
+              {Object.entries(BH_TEMPLATES).map(([key, tpl]) => (
+                <button
+                  key={key}
+                  type="button"
+                  onClick={() => setBh(p => ({ ...p, schedule: tpl.schedule }))}
+                  className="text-xs px-2.5 py-1 rounded-md border border-line text-muted hover:text-ink hover:border-line-strong hover:bg-line-soft transition-colors"
+                >
+                  {tpl.label}
+                </button>
+              ))}
+            </div>
+
+            {/* Weekly grid */}
+            <div className="bg-line-soft/30 border border-line rounded-md divide-y divide-line">
+              {DAYS.map(({ key, label }) => {
+                const on = !!bh.schedule?.[key];
+                return (
+                  <div key={key} className="flex items-center gap-3 px-3 py-2 text-sm">
+                    <button
+                      type="button"
+                      onClick={() => setBh(p => ({ ...p, schedule: { ...p.schedule, [key]: on ? null : { open: "08:00", close: "17:00" } } }))}
+                      className={`relative inline-flex h-4 w-7 items-center rounded-full transition-colors flex-shrink-0 ${on ? "bg-accent" : "bg-line"}`}
+                      aria-label={`Öppet ${label}`}
+                    >
+                      <span className={`inline-block h-2.5 w-2.5 rounded-full bg-white transition-transform ${on ? "translate-x-3.5" : "translate-x-1"}`} />
+                    </button>
+                    <span className="w-20 text-ink">{label}</span>
+                    {on ? (
+                      <div className="flex items-center gap-1.5 text-xs ml-auto">
+                        <input
+                          type="time"
+                          value={bh.schedule[key]?.open || "08:00"}
+                          onChange={e => setBh(p => ({ ...p, schedule: { ...p.schedule, [key]: { ...p.schedule[key], open: e.target.value } } }))}
+                          className="border border-line rounded px-2 py-1 mono focus:outline-none focus:border-accent bg-surface"
+                        />
+                        <span className="text-muted">–</span>
+                        <input
+                          type="time"
+                          value={bh.schedule[key]?.close || "17:00"}
+                          onChange={e => setBh(p => ({ ...p, schedule: { ...p.schedule, [key]: { ...p.schedule[key], close: e.target.value } } }))}
+                          className="border border-line rounded px-2 py-1 mono focus:outline-none focus:border-accent bg-surface"
+                        />
+                      </div>
+                    ) : (
+                      <span className="text-xs text-subtle italic ml-auto">Stängt</span>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
           </div>
         )}
       </div>

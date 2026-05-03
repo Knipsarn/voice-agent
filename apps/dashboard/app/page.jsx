@@ -3,7 +3,7 @@ import { getServerSession } from "next-auth";
 import Link from "next/link";
 
 import { authOptions } from "@/lib/auth-config";
-import { userScope } from "@/lib/tenant-map";
+import { effectiveScope } from "@/lib/tenant-map";
 import { listCalls, listTenants, getTenant } from "@/lib/control-plane";
 import { priceForCall } from "@/lib/pricing";
 import { AppShell } from "./components/AppShell";
@@ -32,7 +32,7 @@ function formatTime(ts) {
 export default async function HomePage({ searchParams }) {
   const session = await getServerSession(authOptions);
   if (!session?.user?.email) redirect("/login");
-  const scope = userScope(session.user.email);
+  const scope = effectiveScope(session.user.email, searchParams);
 
   if (!scope.admin && !scope.tenantId) {
     return (
@@ -78,7 +78,7 @@ export default async function HomePage({ searchParams }) {
   const companyName = tenantDoc?.company_name || tenantId;
 
   return (
-    <AppShell email={session.user.email} admin={scope.admin} tenantId={tenantId} tenantName={companyName}>
+    <AppShell email={session.user.email} admin={scope.admin} tenantId={tenantId} tenantName={companyName} impersonating={scope._impersonating}>
       <div className="max-w-6xl mx-auto px-6 md:px-10 py-8 md:py-12">
         {/* Hero */}
         <header className="mb-10">

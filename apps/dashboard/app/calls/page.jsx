@@ -3,7 +3,7 @@ import { redirect } from "next/navigation";
 import Link from "next/link";
 
 import { authOptions } from "@/lib/auth-config";
-import { userScope } from "@/lib/tenant-map";
+import { effectiveScope } from "@/lib/tenant-map";
 import { listCalls, getTenant, listVoicemails } from "@/lib/control-plane";
 import { priceForCall, marginForCall } from "@/lib/pricing";
 import { AppShell } from "../components/AppShell";
@@ -24,7 +24,7 @@ function formatDuration(ms) {
 export default async function CallsPage({ searchParams }) {
   const session = await getServerSession(authOptions);
   if (!session?.user?.email) redirect("/login");
-  const scope = userScope(session.user.email);
+  const scope = effectiveScope(session.user.email, searchParams);
 
   if (!scope.admin && !scope.tenantId) {
     return (
@@ -49,7 +49,7 @@ export default async function CallsPage({ searchParams }) {
   const tenantName = tenantDoc?.company_name || tenantFilter;
 
   return (
-    <AppShell email={session.user.email} admin={scope.admin} tenantId={tenantFilter} tenantName={tenantName}>
+    <AppShell email={session.user.email} admin={scope.admin} tenantId={tenantFilter} tenantName={tenantName} impersonating={scope._impersonating}>
       <div className="max-w-6xl mx-auto px-6 md:px-10 py-8 md:py-12">
         <header className="mb-8 flex items-end justify-between">
           <div>
