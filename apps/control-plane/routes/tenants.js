@@ -238,4 +238,24 @@ router.post("/:id/publish", async (req, res) => {
   }
 });
 
+// ── DELETE /tenants/:id ──────────────────────────────────────────────────────
+// Removes the tenant document from Firestore. Local Git config (if any) is
+// untouched — bring it back by re-publishing. Use with care; there is no undo.
+router.delete("/:id", async (req, res) => {
+  const tenantId = req.params.id;
+  try {
+    const ref = db.collection("tenants").doc(tenantId);
+    const snap = await ref.get();
+    if (!snap.exists) {
+      return res.status(404).json({ error: `Tenant '${tenantId}' not found in Firestore` });
+    }
+    await ref.delete();
+    console.log(`[DELETE /tenants/${tenantId}] Deleted from Firestore`);
+    res.json({ success: true, tenant_id: tenantId, deleted: true });
+  } catch (err) {
+    console.error(`[DELETE /tenants/${tenantId}] Error:`, err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 module.exports = router;

@@ -8,11 +8,13 @@ import { SuggestionPanel } from "./SuggestionPanel";
 
 // CRM-style tenants get "Ärenden" instead of "Samtal" in their nav.
 const CRM_TENANTS = new Set(["enkla-juridik"]);
-const TENANT_NAV = (tenantId) => [
-  { href: "/", label: "Översikt", icon: "home" },
-  { href: "/calls", label: CRM_TENANTS.has(tenantId) ? "Ärenden" : "Samtal", icon: CRM_TENANTS.has(tenantId) ? "users" : "phone" },
-  { href: "/agent", label: "Min assistent", icon: "mic" },
-  { href: "/settings", label: "Inställningar", icon: "settings" },
+// suffix lets us preserve impersonation params (?as=customer&tenant=X) across nav clicks.
+// Without it, clicking "Ärenden" while impersonating drops the params and redirects to /admin.
+const TENANT_NAV = (tenantId, suffix = "") => [
+  { href: `/${suffix}`,             label: "Översikt", icon: "home" },
+  { href: `/calls${suffix}`,        label: CRM_TENANTS.has(tenantId) ? "Ärenden" : "Samtal", icon: CRM_TENANTS.has(tenantId) ? "users" : "phone" },
+  { href: `/agent${suffix}`,        label: "Min assistent", icon: "mic" },
+  { href: `/settings${suffix}`,     label: "Inställningar", icon: "settings" },
 ];
 
 const ADMIN_NAV = [
@@ -39,7 +41,8 @@ export function Sidebar({ email, admin, tenantId, tenantName, impersonating }) {
   let nav;
   let context;
   if (impersonating) {
-    nav = TENANT_NAV(tenantId);
+    // Preserve impersonation across navigation
+    nav = TENANT_NAV(tenantId, `?tenant=${tenantId}&as=customer`);
     context = { kind: "tenant", tenantId, tenantName };
   } else if (admin && tenantId) {
     nav = ADMIN_TENANT_NAV(tenantId);

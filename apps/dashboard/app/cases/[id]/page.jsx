@@ -227,12 +227,11 @@ function CallEvent({ call }) {
           <p className="text-sm text-ink leading-relaxed">{call.summary.summary}</p>
         )}
         {transcript.length > 0 && (
-          <details className="group">
-            <summary className="cursor-pointer text-xs uppercase tracking-widest text-muted font-semibold hover:text-ink transition-colors inline-flex items-center gap-1.5">
-              <span>Visa transkript</span>
-              <Icon name="arrowRight" size={11} />
-            </summary>
-            <ol className="mt-3 space-y-2 border-t border-line pt-3">
+          <div>
+            <div className="text-[10px] uppercase tracking-widest text-muted font-semibold mb-2">
+              Transkript ({transcript.length} repliker)
+            </div>
+            <ol className="space-y-2 border-t border-line pt-3">
               {transcript.map((t, i) => (
                 <li key={i} className="flex gap-3 text-sm">
                   <span className={`uppercase text-[10px] font-semibold tracking-widest w-12 shrink-0 pt-1 ${t.role === "agent" ? "text-accent" : "text-muted"}`}>
@@ -242,7 +241,10 @@ function CallEvent({ call }) {
                 </li>
               ))}
             </ol>
-          </details>
+          </div>
+        )}
+        {transcript.length === 0 && (
+          <div className="text-xs text-subtle italic">Transkript saknas för detta samtal.</div>
         )}
         <Link
           href={`/calls/${encodeURIComponent(call.call_control_id)}`}
