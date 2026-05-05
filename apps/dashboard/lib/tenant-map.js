@@ -27,7 +27,9 @@ if (ADMIN_EMAILS.size === 0) {
 
 // email -> tenant_id
 // Format env: DASHBOARD_TENANT_EMAILS="email1=tenant1,email2=tenant2"
-const TENANT_EMAILS = new Map();
+const TENANT_EMAILS = new Map([
+  ["niels.groenewegen@enklajuridik.se", "enkla-juridik"],
+]);
 const raw = process.env.DASHBOARD_TENANT_EMAILS || "";
 for (const entry of raw.split(",")) {
   const trimmed = entry.trim();

@@ -23,6 +23,7 @@
 const https = require("https");
 const { Firestore, FieldValue } = require("@google-cloud/firestore");
 const { log, logError } = require("../../lib/log");
+const { alertOnError } = require("../../lib/alert");
 
 const TENANT_ID = "enkla-juridik";
 const CASES = "cases";
@@ -186,6 +187,7 @@ module.exports = async function enklaJuridikPostCall({ call, summary }) {
       log("integration_pipefy_synced", { tenant_id: TENANT_ID, case_id: caseId, ...r });
     } catch (err) {
       logError("integration_pipefy_failed", { tenant_id: TENANT_ID, case_id: caseId, error: err.message });
+      alertOnError("integration_pipefy_failed", { tenant_id: TENANT_ID, case_id: caseId, error: err.message });
     }
     return;
   }
@@ -207,5 +209,6 @@ module.exports = async function enklaJuridikPostCall({ call, summary }) {
     });
   } catch (err) {
     logError("integration_sms_failed", { tenant_id: TENANT_ID, case_id: caseId, error: err.message });
+    alertOnError("integration_sms_failed", { tenant_id: TENANT_ID, case_id: caseId, error: err.message });
   }
 };

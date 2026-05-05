@@ -18,6 +18,25 @@ const { Firestore, FieldValue } = require("@google-cloud/firestore");
 const { getRepoTree, readFile, searchCode, pushBranchAndPR } = require("./github");
 const { analyzeAndPatch } = require("./claude-agent");
 
+const ADMIN_EMAIL = process.env.ADMIN_NOTIFICATION_EMAIL || "nils.wahlin@snmintegrations.se";
+const ALERT_FROM  = process.env.ALERT_FROM_EMAIL         || "Voice Platform <noreply@snmintegrations.se>";
+
+async function sendPatchAlert({ subject, text }) {
+  const apiKey = process.env.RESEND_API_KEY;
+  if (!apiKey) { console.warn("[patch-agent] No RESEND_API_KEY — alert not sent"); return; }
+  try {
+    const res = await fetch("https://api.resend.com/emails", {
+      method: "POST",
+      headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
+      body: JSON.stringify({ from: ALERT_FROM, to: [ADMIN_EMAIL], subject, text }),
+    });
+    if (!res.ok) console.error("[patch-agent] alert send failed:", res.status, await res.text().catch(() => ""));
+    else console.log(`[patch-agent] alert sent: ${subject}`);
+  } catch (err) {
+    console.error("[patch-agent] alert send error:", err.message);
+  }
+}
+
 const PORT = process.env.PORT || 8080;
 const GITHUB_TOKEN = process.env.GITHUB_TOKEN;
 const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY;
@@ -93,6 +112,24 @@ async function runPatchJob(incidentId) {
         patch_completed_at: FieldValue.serverTimestamp(),
       });
       console.log(`[patch-agent] No code fix proposed for ${incidentId}: ${proposal.no_fix_reason}`);
+
+      // Notify operator — needs manual attention
+      await sendPatchAlert({
+        subject: `[Voice Platform] Error needs attention: ${incident.service}`,
+        text: [
+          `Incident ${incidentId} was investigated but no automatic fix is possible.`,
+          "",
+          `Service:  ${incident.service}`,
+          `Severity: ${incident.severity}`,
+          `Error:    ${(incident.message || "").slice(0, 300)}`,
+          "",
+          `Analysis: ${(proposal.analysis || "").slice(0, 800)}`,
+          "",
+          `Reason no fix: ${proposal.no_fix_reason || "unknown"}`,
+          "",
+          "Action required — review and fix manually.",
+        ].join("\n"),
+      });
       return;
     }
 
@@ -130,6 +167,26 @@ async function runPatchJob(incidentId) {
     });
 
     console.log(`[patch-agent] Incident ${incidentId} updated with PR #${prNumber}`);
+
+    // Notify operator — review and merge to deploy the fix
+    await sendPatchAlert({
+      subject: `[Voice Platform] Auto-fix ready for review: ${incident.service}`,
+      text: [
+        `Patch-agent has proposed a fix for incident ${incidentId}.`,
+        "",
+        `Service:  ${incident.service}`,
+        `Severity: ${incident.severity}`,
+        `Error:    ${(incident.message || "").slice(0, 300)}`,
+        "",
+        `PR:       ${prUrl}`,
+        `Risk:     ${proposal.risk || "unknown"}`,
+        `Files:    ${filesChanged}`,
+        "",
+        `Analysis: ${(proposal.analysis || "").slice(0, 600)}`,
+        "",
+        "Review and merge the PR — Cloud Build will deploy automatically.",
+      ].join("\n"),
+    });
   } catch (err) {
     console.error(`[patch-agent] Error during patch job:`, err);
     await incidentRef.update({
