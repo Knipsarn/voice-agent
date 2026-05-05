@@ -181,4 +181,95 @@ async function syncPipefyForCase(caseId) {
   return { ok: true, case_id: caseId, pipefy_card_id: cardId, action };
 }
 
-module.exports = { syncPipefyForCase };
+/**
+ * Partial/auto sync — same as syncPipefyForCase but no name+email gate.
+ * Used by the 12-hour auto-sync scheduler job.
+ *
+ * Status logic:
+ *   - email present  → status=SENT,        active=false  (fully converted)
+ *   - email missing  → status=WAITING_SMS,  active=true   (still collecting info)
+ *
+ * Also writes pipefy_auto_synced_at timestamp on the Firestore case.
+ *
+ * @param {string} caseId
+ * @returns {object} { ok, case_id, pipefy_card_id, action: "created"|"updated", skipped? }
+ */
+async function syncPipefyPartial(caseId) {
+  const ref = getDb().collection("cases").doc(caseId);
+  const snap = await ref.get();
+  if (!snap.exists) return { ok: false, error: "case_not_found", case_id: caseId };
+
+  const caseDoc = snap.data();
+
+  // Require at minimum a phone number (always present from call)
+  if (!caseDoc.phone) {
+    return { ok: false, skipped: "missing_phone", case_id: caseId };
+  }
+
+  const { fieldMap, firstPhaseId } = await getPipeFields();
+  const title = caseDoc.name || caseDoc.phone || "Nytt ärende";
+
+  // Verify existing card still exists in Pipefy
+  let cardId = caseDoc.pipefy_card_id || null;
+  let action;
+  if (cardId && !(await cardExists(cardId))) cardId = null;
+
+  if (!cardId) {
+    // CREATE
+    const attrs = buildAttrs(fieldMap, caseDoc);
+    const res = await gql(`
+      mutation CreateCard($pipeId: ID!, $phaseId: ID!, $title: String!, $attrs: [FieldValueInput!]!) {
+        createCard(input: { pipe_id: $pipeId, phase_id: $phaseId, title: $title, fields_attributes: $attrs }) {
+          card { id }
+        }
+      }
+    `, { pipeId: PIPE_ID, phaseId: firstPhaseId, title, attrs });
+    cardId = res.data.createCard.card.id;
+    action = "created";
+  } else {
+    // UPDATE — title + each field via updateFieldsValues
+    await gql(`
+      mutation UpdateTitle($id: ID!, $title: String!) {
+        updateCard(input: { id: $id, title: $title }) { card { id } }
+      }
+    `, { id: cardId, title });
+
+    const values = buildAttrs(fieldMap, caseDoc).map((a) => ({
+      fieldId: a.field_id,
+      value: a.field_value,
+    }));
+    if (values.length) {
+      await gql(`
+        mutation UpdateFields($nodeId: ID!, $values: [NodeFieldValueInput!]!) {
+          updateFieldsValues(input: { nodeId: $nodeId, values: $values }) { success }
+        }
+      `, { nodeId: cardId, values });
+    }
+    action = "updated";
+  }
+
+  // Status depends on whether we have an email
+  const hasEmail = !!caseDoc.email;
+  const firestoreUpdate = {
+    pipefy_card_id:        cardId,
+    status:                hasEmail ? "SENT" : "WAITING_SMS",
+    active:                !hasEmail,
+    pipefy_synced_at:      FieldValue.serverTimestamp(),
+    pipefy_auto_synced_at: FieldValue.serverTimestamp(),
+    updatedAt:             FieldValue.serverTimestamp(),
+  };
+  await ref.set(firestoreUpdate, { merge: true });
+
+  console.log(JSON.stringify({
+    event:          "pipefy_auto_synced",
+    case_id:        caseId,
+    pipefy_card_id: cardId,
+    action,
+    has_email:      hasEmail,
+    status:         firestoreUpdate.status,
+  }));
+
+  return { ok: true, case_id: caseId, pipefy_card_id: cardId, action, status: firestoreUpdate.status };
+}
+
+module.exports = { syncPipefyForCase, syncPipefyPartial };
