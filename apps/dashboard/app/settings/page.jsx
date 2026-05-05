@@ -111,13 +111,19 @@ export default async function SettingsPage({ searchParams }) {
           <section className="bg-surface border border-line rounded-lg p-6 space-y-3">
             <h2 className="text-[11px] uppercase tracking-widest text-muted font-semibold">Fortnox integration</h2>
             {fortnoxStatus?.connected ? (
-              <div className="flex items-center gap-3">
+              <div className="flex items-center gap-3 flex-wrap">
                 <span className="inline-block bg-success/10 text-success text-[10px] uppercase tracking-wider font-semibold px-2 py-1 rounded">
                   Connected
                 </span>
                 <span className="text-xs text-muted tabular">
                   Token expires {new Date(fortnoxStatus.expires_at).toLocaleString("sv-SE")}
                 </span>
+                <a
+                  href={`/api/fortnox/connect?tenant=${encodeURIComponent(tenantId)}`}
+                  className="inline-flex items-center gap-1.5 text-xs px-2.5 py-1 rounded-md border border-line text-muted hover:text-ink hover:border-ink transition-colors"
+                >
+                  Reconnect / update scopes
+                </a>
               </div>
             ) : (
               <a
