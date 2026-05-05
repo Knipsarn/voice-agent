@@ -117,6 +117,10 @@ export async function updateSuggestion(tenantId, id, partial) {
   return cpJson("POST", `/suggestions/${encodeURIComponent(tenantId)}/${encodeURIComponent(id)}`, partial);
 }
 
+export async function getIncident(id) {
+  return cpGet(`/incidents/${encodeURIComponent(id)}`);
+}
+
 export async function listIncidents({ status, service, since, limit = 50 } = {}) {
   const params = new URLSearchParams();
   if (status) params.set("status", status);

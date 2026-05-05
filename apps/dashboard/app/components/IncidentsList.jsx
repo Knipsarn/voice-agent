@@ -1,5 +1,6 @@
 "use client";
 import { useState, useMemo } from "react";
+import Link from "next/link";
 import { Icon } from "./Icon";
 
 // Which statuses are "open" (need attention or were auto-handled)
@@ -109,9 +110,10 @@ export function IncidentsList({ initial }) {
 
           return (
             <li key={inc.id} className="bg-surface border border-line rounded-lg overflow-hidden">
+              <div className="flex items-stretch">
               <button
                 onClick={() => setExpanded(isOpen ? null : inc.id)}
-                className="w-full text-left px-5 py-4 hover:bg-line-soft/40 transition-colors"
+                className="flex-1 text-left px-5 py-4 hover:bg-line-soft/40 transition-colors"
               >
                 <div className="flex items-start gap-4">
                   <div className="flex-shrink-0 mt-1">
@@ -139,6 +141,14 @@ export function IncidentsList({ initial }) {
                   </div>
                 </div>
               </button>
+              <Link
+                href={`/admin/incidents/${inc.id}`}
+                className="flex items-center px-3 border-l border-line text-subtle hover:text-ink hover:bg-line-soft/40 transition-colors text-xs"
+                title="View full timeline"
+              >
+                →
+              </Link>
+              </div>
 
               {isOpen && (
                 <div className="px-5 pb-5 pt-0 border-t border-line bg-line-soft/30 space-y-4">

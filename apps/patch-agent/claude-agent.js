@@ -91,8 +91,35 @@ const TOOLS = [
   },
 ];
 
-async function analyzeAndPatch(incident, repoTree, githubOps) {
+function formatHistory(priorIncidents) {
+  if (!priorIncidents?.length) return "(none)";
+  return priorIncidents.map((h) => {
+    const ts = h.created_at?._seconds
+      ? new Date(h.created_at._seconds * 1000).toISOString().slice(0, 10)
+      : (h.timestamp || "?").slice(0, 10);
+    const outcome = h.status === "auto_deployed"   ? "auto-deployed"
+                  : h.status === "patch_proposed"  ? "PR opened (manual merge)"
+                  : h.status === "patch_failed"    ? "patch job failed"
+                  : h.status === "investigated"    ? "investigated, no fix"
+                  : h.status;
+    return [
+      `### ${ts} — ${h.id} (${outcome})`,
+      `Error: ${(h.message || "").split("\n")[0].slice(0, 200)}`,
+      h.patch_analysis ? `Analysis: ${h.patch_analysis.slice(0, 400)}` : "",
+      h.patch_files_changed ? `Files changed: ${h.patch_files_changed}` : "",
+      h.patch_risk ? `Risk: ${h.patch_risk}` : "",
+      h.patch_test_suggestion ? `Verification: ${h.patch_test_suggestion}` : "",
+      h.patch_no_fix_reason ? `No fix reason: ${h.patch_no_fix_reason}` : "",
+    ].filter(Boolean).join("\n");
+  }).join("\n\n");
+}
+
+async function analyzeAndPatch(incident, repoTree, githubOps, priorIncidents = []) {
   const client = new Anthropic.default({ apiKey: process.env.ANTHROPIC_API_KEY });
+
+  const historySection = priorIncidents.length > 0
+    ? `\n\n## Prior incidents for ${incident.service} (${priorIncidents.length} found — read carefully before proposing a fix)\n${formatHistory(priorIncidents)}\n\nIMPORTANT: If a previous fix was applied and the error recurred, the fix did not work — do not propose it again. If a fix was auto-deployed and this is the first recurrence, note that in your analysis.`
+    : "\n\n## Prior incidents\nNone recorded for this service yet.";
 
   const systemPrompt = `You are an autonomous error-fix agent for a production multitenant AI voice platform.
 
@@ -134,7 +161,7 @@ async function analyzeAndPatch(incident, repoTree, githubOps) {
 - If you genuinely cannot safely fix it, call propose_patch with no changes and explain why
 
 ## Available repo files
-${repoTree.files.slice(0, 500).join("\n")}`;
+${repoTree.files.slice(0, 500).join("\n")}${historySection}`;
 
   const userMessage = `Investigate this production error and propose a fix.
 
@@ -228,4 +255,4 @@ Start by reading the most relevant source files, then trace the error to its roo
   return { proposal, iterations };
 }
 
-module.exports = { analyzeAndPatch };
+module.exports = { analyzeAndPatch, formatHistory };

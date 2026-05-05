@@ -100,17 +100,37 @@ async function runPatchJob(incidentId) {
   await incidentRef.update({ status: "investigating", patch_started_at: FieldValue.serverTimestamp() });
 
   try {
-    console.log(`[patch-agent] Fetching repo tree...`);
-    const repoTree = await getRepoTree(GITHUB_TOKEN);
+    console.log(`[patch-agent] Fetching repo tree and incident history...`);
+    const [repoTree, histSnap] = await Promise.all([
+      getRepoTree(GITHUB_TOKEN),
+      db.collection("incidents")
+        .where("service", "==", incident.service)
+        .orderBy("created_at", "desc")
+        .limit(10)
+        .get(),
+    ]);
     console.log(`[patch-agent] Repo has ${repoTree.files.length} files`);
+
+    // Prior incidents for same service (excluding this one)
+    const priorIncidents = histSnap.docs
+      .map((d) => ({ id: d.id, ...d.data() }))
+      .filter((h) => h.id !== incidentId && (h.patch_analysis || h.patch_result || h.patch_no_fix_reason));
+    console.log(`[patch-agent] Found ${priorIncidents.length} prior incident(s) for ${incident.service}`);
+
+    // Store prior incident IDs on this incident for the dashboard history panel
+    if (priorIncidents.length > 0) {
+      await incidentRef.update({
+        prior_incident_ids: priorIncidents.slice(0, 5).map((h) => h.id),
+      });
+    }
 
     const githubOps = {
       readFile:   (path)  => readFile(GITHUB_TOKEN, path),
       searchCode: (query) => searchCode(GITHUB_TOKEN, query),
     };
 
-    console.log(`[patch-agent] Starting Claude investigation...`);
-    const { proposal, iterations } = await analyzeAndPatch(incident, repoTree, githubOps);
+    console.log(`[patch-agent] Starting Claude investigation (${priorIncidents.length} prior incidents loaded)...`);
+    const { proposal, iterations } = await analyzeAndPatch(incident, repoTree, githubOps, priorIncidents);
     console.log(`[patch-agent] Investigation complete in ${iterations} iterations. Changes: ${proposal.changes?.length || 0}`);
 
     if (!proposal.changes?.length) {

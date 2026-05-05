@@ -55,6 +55,33 @@ router.get("/", async (req, res) => {
   }
 });
 
+// GET /incidents/:id — full detail for one incident
+router.get("/:id", async (req, res) => {
+  try {
+    const ref = getDb().collection(COLLECTION).doc(req.params.id);
+    const snap = await ref.get();
+    if (!snap.exists) return res.status(404).json({ error: "Not found" });
+
+    // Also load prior incidents for the same service (for context panel)
+    const incident = { id: snap.id, ...snap.data() };
+    const service = incident.service || "unknown";
+    const histSnap = await getDb()
+      .collection(COLLECTION)
+      .where("service", "==", service)
+      .orderBy("created_at", "desc")
+      .limit(20)
+      .get();
+
+    const history = histSnap.docs
+      .map((d) => ({ id: d.id, ...d.data() }))
+      .filter((h) => h.id !== snap.id);
+
+    res.json({ incident, history });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 router.post("/:id", async (req, res) => {
   try {
     const { status, note, by } = req.body || {};
