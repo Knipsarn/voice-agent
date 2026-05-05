@@ -50,6 +50,31 @@ const TOOLS = [
     },
   },
   {
+    name: "search_incidents",
+    description: "Search the incident history database. Use this before proposing a fix to see if this error has occurred before, what was tried, whether fixes held, and what files were changed. Returns structured incident records.",
+    input_schema: {
+      type: "object",
+      properties: {
+        keyword: {
+          type: "string",
+          description: "Word or phrase to match against error messages and prior analyses — e.g. 'tenantLoader', 'Cannot read', 'sms_send_failed'",
+        },
+        service: {
+          type: "string",
+          description: "Filter to a specific service name, e.g. 'voice-bridge-service'. Omit to search across all services.",
+        },
+        status: {
+          type: "string",
+          description: "Filter by outcome: 'auto_deployed' (fix held?), 'patch_failed' (fix attempt broke?), 'patch_proposed' (pending review), 'investigated' (no fix found)",
+        },
+        limit: {
+          type: "number",
+          description: "Max results to return. Default 5, max 20.",
+        },
+      },
+    },
+  },
+  {
     name: "propose_patch",
     description: "Propose code changes that fix the error. Call this when you have a complete, confident fix. This terminates the investigation.",
     input_schema: {
@@ -91,35 +116,8 @@ const TOOLS = [
   },
 ];
 
-function formatHistory(priorIncidents) {
-  if (!priorIncidents?.length) return "(none)";
-  return priorIncidents.map((h) => {
-    const ts = h.created_at?._seconds
-      ? new Date(h.created_at._seconds * 1000).toISOString().slice(0, 10)
-      : (h.timestamp || "?").slice(0, 10);
-    const outcome = h.status === "auto_deployed"   ? "auto-deployed"
-                  : h.status === "patch_proposed"  ? "PR opened (manual merge)"
-                  : h.status === "patch_failed"    ? "patch job failed"
-                  : h.status === "investigated"    ? "investigated, no fix"
-                  : h.status;
-    return [
-      `### ${ts} — ${h.id} (${outcome})`,
-      `Error: ${(h.message || "").split("\n")[0].slice(0, 200)}`,
-      h.patch_analysis ? `Analysis: ${h.patch_analysis.slice(0, 400)}` : "",
-      h.patch_files_changed ? `Files changed: ${h.patch_files_changed}` : "",
-      h.patch_risk ? `Risk: ${h.patch_risk}` : "",
-      h.patch_test_suggestion ? `Verification: ${h.patch_test_suggestion}` : "",
-      h.patch_no_fix_reason ? `No fix reason: ${h.patch_no_fix_reason}` : "",
-    ].filter(Boolean).join("\n");
-  }).join("\n\n");
-}
-
-async function analyzeAndPatch(incident, repoTree, githubOps, priorIncidents = []) {
+async function analyzeAndPatch(incident, repoTree, githubOps) {
   const client = new Anthropic.default({ apiKey: process.env.ANTHROPIC_API_KEY });
-
-  const historySection = priorIncidents.length > 0
-    ? `\n\n## Prior incidents for ${incident.service} (${priorIncidents.length} found — read carefully before proposing a fix)\n${formatHistory(priorIncidents)}\n\nIMPORTANT: If a previous fix was applied and the error recurred, the fix did not work — do not propose it again. If a fix was auto-deployed and this is the first recurrence, note that in your analysis.`
-    : "\n\n## Prior incidents\nNone recorded for this service yet.";
 
   const systemPrompt = `You are an autonomous error-fix agent for a production multitenant AI voice platform.
 
@@ -161,7 +159,10 @@ async function analyzeAndPatch(incident, repoTree, githubOps, priorIncidents = [
 - If you genuinely cannot safely fix it, call propose_patch with no changes and explain why
 
 ## Available repo files
-${repoTree.files.slice(0, 500).join("\n")}${historySection}`;
+${repoTree.files.slice(0, 500).join("\n")}
+
+## Incident history
+You have a \`search_incidents\` tool. Use it before proposing any fix to check whether this error has occurred before, what was tried, and whether it held. Search by keyword from the error message, by file name, or by service. If a prior fix was auto-deployed and the error recurred, that fix failed — do not repeat it.`;
 
   const userMessage = `Investigate this production error and propose a fix.
 
@@ -228,6 +229,9 @@ Start by reading the most relevant source files, then trace the error to its roo
           result = hits.length > 0
             ? hits.map((h) => `${h.path} (score: ${h.score})`).join("\n")
             : "(no results)";
+        } else if (toolUse.name === "search_incidents") {
+          const hits = await githubOps.searchIncidents(toolUse.input);
+          result = hits.length > 0 ? hits.map(formatIncidentSummary).join("\n\n---\n\n") : "(no matching incidents found)";
         } else if (toolUse.name === "propose_patch") {
           proposal = toolUse.input;
           result = "Patch proposal recorded. Investigation complete.";
@@ -255,4 +259,24 @@ Start by reading the most relevant source files, then trace the error to its roo
   return { proposal, iterations };
 }
 
-module.exports = { analyzeAndPatch, formatHistory };
+function formatIncidentSummary(h) {
+  const ts = h.created_at?._seconds
+    ? new Date(h.created_at._seconds * 1000).toISOString().slice(0, 16).replace("T", " ")
+    : (h.timestamp || "?").slice(0, 16);
+  const outcome = h.status === "auto_deployed"  ? "auto-deployed ✓"
+                : h.status === "patch_proposed" ? "PR opened, awaiting review"
+                : h.status === "patch_failed"   ? "patch job failed ✗"
+                : h.status === "investigated"   ? "investigated, no fix applied"
+                : h.status || "unknown";
+  return [
+    `ID: ${h.id}  |  ${ts}  |  ${h.service || "?"}  |  outcome: ${outcome}`,
+    `Error: ${(h.message || "").split("\n")[0].slice(0, 250)}`,
+    h.patch_analysis    ? `Analysis: ${h.patch_analysis.slice(0, 500)}`         : null,
+    h.patch_files_changed ? `Files changed: ${h.patch_files_changed}`           : null,
+    h.patch_risk        ? `Risk: ${h.patch_risk}`                                : null,
+    h.patch_test_suggestion ? `Verification: ${h.patch_test_suggestion.slice(0, 200)}` : null,
+    h.patch_no_fix_reason ? `No fix reason: ${h.patch_no_fix_reason.slice(0, 200)}`    : null,
+  ].filter(Boolean).join("\n");
+}
+
+module.exports = { analyzeAndPatch };
