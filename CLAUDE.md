@@ -454,3 +454,111 @@ No UI needed. Claude Code in VS Code IS the ops interface.
 | Local GCP auth expires frequently | Known friction | Run `gcloud auth application-default login` when scripts fail with `invalid_grant` |
 | Logs filter by `textPayload` string match | Fragile | Improve with structured JSON logging + `jsonPayload.tenant_id` filter |
 | No structured call tracing | Gap | See roadmap item 1 above |
+
+---
+
+## 15. Building philosophy — how this project grows
+
+This section governs how new features, integrations, and infrastructure are added.
+Follow these principles in every session.
+
+### Lego architecture: modular, reusable pieces
+
+Every integration that could be useful in another project is built as a **self-contained package** in `docs/`:
+
+```
+docs/
+  fortnox-package/        OAuth2 + invoicing
+  agent-pipeline-package/ Autonomous error-fix pipeline
+  sms-package/            46elks SMS
+```
+
+**What a package must contain:**
+- The actual source files (not references to them) — so an AI in a completely different project can implement it without access to this repo
+- A `README.md` written for an AI with zero prior context: what it does, where each file goes, all env vars, Firestore collections, step-by-step setup, gotchas, testing checklist
+
+**When to create a package:** any time you build something that crosses a clear service boundary (auth, payments, messaging, notifications) or that another project would want to reuse. Don't wait until the integration is perfect — package it when it's working.
+
+**Rule:** if you ever have to say "the file is at apps/..." when handing something off, it's not packaged yet.
+
+---
+
+### Infrastructure as code — nothing manual without documentation
+
+Every GCP resource that exists must be reflected in `infrastructure/setup.sh`. This includes:
+- Cloud Run services (concurrency, min instances, secrets mounted)
+- Cloud Scheduler jobs (schedule, URI, auth, body)
+- Pub/Sub topics and subscriptions
+- Log sinks and their filters
+- IAM bindings
+- Secret Manager secrets (names only — never values in code)
+- Firestore indexes in `firestore.indexes.json`
+
+**Rule:** when you create any GCP resource, update `infrastructure/setup.sh` in the same commit. If you can't recreate the stack from `setup.sh` alone, it's not documented.
+
+---
+
+### Data not code — tenant differences live in config
+
+All tenant behaviour differences are expressed as data (`configs/tenants/*.json`, `configs/prompt-assets/`) — never as code branches, feature flags, or if-statements keyed on tenant ID in the application code.
+
+**Rule:** if you find yourself writing `if (tenantId === "enkla-juridik")` in application code, that logic belongs in the tenant config instead.
+
+---
+
+### Safety-first deployment
+
+Every change follows a progression before touching production:
+
+**For tenant configs:**
+1. Edit `configs/` locally
+2. `tenant-diff.js` — review every changed field
+3. `tenant-publish.js --dry-run` — confirm no validation errors
+4. `tenant-publish.js` — publish to Firestore (live on next call, no redeploy)
+
+**For code changes:**
+1. Understand the issue before touching anything — read logs, read source
+2. Make the minimal change that fixes the specific problem
+3. Commit + push → Cloud Build deploys automatically
+
+**For infrastructure changes:**
+1. Test with `--dry-run` or equivalent where available
+2. Update `setup.sh` in the same commit as the resource creation
+
+**The patch-agent risk model:**
+- `risk=low` → Claude auto-merges and deploys without human review
+- `risk=medium` → PR opened, human must review before merge
+- `risk=high` → PR opened, human must review before merge
+
+This same model applies when Claude Code makes code changes directly: isolated changes to a single service are low-risk; changes to shared utilities, auth paths, or data models require explicit user confirmation.
+
+---
+
+### Discuss before fix
+
+When a problem is reported or discovered:
+1. **Show findings first** — read the relevant code, logs, and config; explain what you found
+2. **Confirm understanding** — state what you believe the root cause is and what the fix would do
+3. **Then implement** — only after the user has confirmed or redirected
+
+Exception: if the fix is a single obvious config value (e.g. `"enabled": false → true`) and the cause is clear from logs, state what you're doing and do it in the same message.
+
+---
+
+### Every new GCP resource → update setup.sh
+
+When adding any new Cloud Scheduler job, Pub/Sub subscription, log sink, or Secret Manager secret, the `infrastructure/setup.sh` script must be updated in the same PR/commit. This keeps the infrastructure reproducible.
+
+---
+
+### Claude Code as the operator brain
+
+Claude Code (this environment) is the central operator. It can:
+- Read logs, replay calls, inspect tenant configs
+- Publish config changes to Firestore
+- Commit and push code
+- Deploy via git push (triggers Cloud Build)
+- Create Cloud Scheduler jobs and GCP resources
+- Investigate and patch production errors via the agent pipeline
+
+This means Claude Code should operate proactively — not wait to be asked step by step. When diagnosing a problem, read all the relevant files, form a complete picture, then present findings and a proposed fix together.

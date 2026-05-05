@@ -128,6 +128,34 @@ Recreate from scratch: `./infrastructure/setup.sh`
 
 ---
 
+## Building philosophy
+
+This project is built as modular lego pieces. Follow these rules when extending it:
+
+**1. Package every reusable integration.**
+Any integration that another project could use (auth, payments, SMS, invoicing) goes in `docs/` as a self-contained package with actual file contents + a README an AI can follow without touching this repo. If you have to say "the file is at apps/..." when handing it off, it's not packaged yet.
+
+**2. Infrastructure as code — nothing manual without documentation.**
+Every GCP resource (Cloud Run, Scheduler, Pub/Sub, secrets, log sinks) must be reflected in `infrastructure/setup.sh`. Update the script in the same commit as the resource. If the stack can't be recreated from `setup.sh`, it's not documented.
+
+**3. Data not code.**
+Tenant differences live in `configs/` — never as if-statements keyed on tenant ID in application code. All tenant behaviour is expressed as config data published to Firestore.
+
+**4. Safety-first deployment.**
+- Tenant configs: `diff` → `--dry-run` → `publish` → live on next call, no redeploy
+- Code: minimal change → commit → Cloud Build auto-deploys
+- Patches: `risk=low` auto-merges, `risk=medium/high` opens PR for human review
+
+**5. Discuss before fix.**
+Read logs and source first. State findings and proposed fix together. Only implement after the user confirms — unless it's a single obvious config value with a clear cause.
+
+**6. Claude Code is the operator.**
+Claude Code can read logs, publish configs, commit code, create GCP resources, and investigate errors. It operates proactively — forms a complete picture before presenting findings, not step by step.
+
+Full details: **`CLAUDE.md` section 15 — Building philosophy**.
+
+---
+
 ## Day-to-day operations
 
 See **`CLAUDE.md`** — full operator manual with error playbooks, publish workflows, and debugging guides.
