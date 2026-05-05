@@ -108,4 +108,15 @@ async function pushBranchAndPR(token, { branchName, changes, commitMessage, prTi
   return { branchName, prUrl: pr.html_url, prNumber: pr.number };
 }
 
-module.exports = { getRepoTree, readFile, searchCode, pushBranchAndPR };
+/**
+ * Squash-merge an open PR. Used for auto-deploying low-risk patches.
+ */
+async function mergePR(token, prNumber, { commitTitle, commitMessage } = {}) {
+  return ghFetch(token, "PUT", `/repos/${OWNER}/${REPO}/pulls/${prNumber}/merge`, {
+    merge_method: "squash",
+    commit_title: commitTitle || `auto-patch: merge PR #${prNumber}`,
+    commit_message: commitMessage || "",
+  });
+}
+
+module.exports = { getRepoTree, readFile, searchCode, pushBranchAndPR, mergePR };
