@@ -13,7 +13,7 @@ const router = express.Router();
 const { Firestore, FieldValue } = require("@google-cloud/firestore");
 
 const COLLECTION = "incidents";
-const ALLOWED_STATUSES = ["new", "acknowledged", "resolved", "ignored"];
+const ALLOWED_STATUSES = ["new", "acknowledged", "resolved", "ignored", "auto_deployed", "patch_proposed", "investigated", "investigating"];
 
 let db = null;
 function getDb() {
