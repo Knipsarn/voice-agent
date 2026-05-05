@@ -120,12 +120,12 @@ export default async function SettingsPage({ searchParams }) {
                 </span>
               </div>
             ) : (
-              <div className="space-y-2">
-                <p className="text-sm text-muted">
-                  Run the local connect script to authorize once:
-                </p>
-                <code className="block text-xs bg-line-soft border border-line rounded px-3 py-2 mono">node scripts/ops/fortnox-connect.js</code>
-              </div>
+              <a
+                href={`/api/fortnox/connect?tenant=${encodeURIComponent(tenantId)}`}
+                className="inline-flex items-center gap-2 bg-ink text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-ink/85 transition-colors"
+              >
+                Connect Fortnox
+              </a>
             )}
           </section>
         )}
