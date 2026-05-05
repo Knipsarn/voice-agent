@@ -25,7 +25,7 @@ export async function GET(req) {
   const params = new URLSearchParams({
     client_id: CLIENT_ID,
     redirect_uri: REDIRECT_URI,
-    scope: "invoice",
+    scope: "invoice customer",
     state: `fortnox_connect:${tenant}`,
     response_type: "code",
     access_type: "offline",
