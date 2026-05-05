@@ -3,7 +3,7 @@ import { redirect } from "next/navigation";
 
 import { authOptions } from "@/lib/auth-config";
 import { userScope } from "@/lib/tenant-map";
-import { listCalls, getBillingInvoice, getTenant } from "@/lib/control-plane";
+import { listCalls, getBillingInvoice, getTenant, listSmsBilling } from "@/lib/control-plane";
 import { priceForCall, RATES } from "@/lib/pricing";
 import { AppShell } from "../components/AppShell";
 import { InvoiceActionPanel } from "../components/InvoiceActionPanel";
@@ -42,18 +42,21 @@ export default async function BillingPage({ searchParams }) {
   const nextInvoice = startOfNextMonth();
   const month = currentMonthKey();
 
-  const [callsRes, invoiceRecord, tenantDoc] = await Promise.all([
+  const [callsRes, smsRes, invoiceRecord, tenantDoc] = await Promise.all([
     listCalls({ tenantId, since: monthStart.toISOString(), limit: 500, includeCosts: scope.admin }).catch(() => ({ calls: [] })),
+    listSmsBilling(tenantId, { since: monthStart.toISOString(), until: nextInvoice.toISOString() }).catch(() => ({ sessions: [] })),
     scope.admin ? getBillingInvoice(tenantId, month).catch(() => ({ status: "not_invoiced" })) : null,
     getTenant(tenantId).catch(() => null),
   ]);
 
   const calls = callsRes.calls || [];
+  const smsSessions = smsRes.sessions || [];
   const tenantName = tenantDoc?.company_name || tenantId;
 
   const totalMinutes = calls.reduce((s, c) => s + (c.duration_ms || 0) / 60000, 0);
   const usagePrice = calls.reduce((s, c) => s + priceForCall(c.duration_ms), 0);
-  const totalPrice = usagePrice + STATIC_MONTHLY_SEK;
+  const smsTotalSek = smsSessions.reduce((s, m) => s + (m.cost_customer_sek || 0), 0);
+  const totalPrice = usagePrice + STATIC_MONTHLY_SEK + smsTotalSek;
   const totalCost = scope.admin ? calls.reduce((s, c) => s + (c.costs?.cost_total_sek || 0), 0) : 0;
   const totalMargin = totalPrice - totalCost;
 
@@ -127,6 +130,11 @@ export default async function BillingPage({ searchParams }) {
                 <td className="px-5 py-3">Usage (voice minutes)</td>
                 <td className="px-5 py-3 text-muted tabular">{totalMinutes.toFixed(2)} min × {RATES.per_minute_sek} kr/min</td>
                 <td className="px-5 py-3 text-right tabular">{usagePrice.toFixed(2)} kr</td>
+              </tr>
+              <tr>
+                <td className="px-5 py-3">SMS-notifieringar</td>
+                <td className="px-5 py-3 text-muted tabular">{smsSessions.length} st × 3.50 kr/SMS</td>
+                <td className="px-5 py-3 text-right tabular">{smsTotalSek.toFixed(2)} kr</td>
               </tr>
               <tr className="bg-line-soft/40 font-semibold">
                 <td className="px-5 py-3">Total</td>

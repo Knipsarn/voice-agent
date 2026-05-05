@@ -153,6 +153,15 @@ export async function listSms(tenantId, { caseId, status, limit = 50 } = {}) {
   return cpGet(`/sms?${params.toString()}`);
 }
 
+export async function listSmsBilling(tenantId, { since, until, limit = 1000 } = {}) {
+  const params = new URLSearchParams();
+  params.set("tenant_id", tenantId);
+  if (since) params.set("since", since);
+  if (until) params.set("until", until);
+  params.set("limit", String(limit));
+  return cpGet(`/sms?${params.toString()}`);
+}
+
 export async function listVoicemails(tenantId, { limit = 50 } = {}) {
   return cpGet(`/voicemail/${encodeURIComponent(tenantId)}?limit=${limit}`);
 }

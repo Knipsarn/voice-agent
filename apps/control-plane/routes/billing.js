@@ -100,19 +100,32 @@ router.post("/:tenantId/:month/create", async (req, res) => {
       });
     }
 
-    // Aggregate calls for the month
+    // Aggregate calls and SMS for the month
     const { start, end, year, mon } = parsed;
-    const callsSnap = await getDb()
-      .collection("call_sessions")
-      .where("tenant_id", "==", tenantId)
-      .where("initiated_at", ">=", start)
-      .where("initiated_at", "<", end)
-      .get();
+    const [callsSnap, smsSnap] = await Promise.all([
+      getDb()
+        .collection("call_sessions")
+        .where("tenant_id", "==", tenantId)
+        .where("initiated_at", ">=", start)
+        .where("initiated_at", "<", end)
+        .get(),
+      getDb()
+        .collection("sms_sessions")
+        .where("tenant_id", "==", tenantId)
+        .where("sent_at", ">=", start)
+        .where("sent_at", "<", end)
+        .get(),
+    ]);
 
     const calls = callsSnap.docs.map((d) => d.data());
     const totalMinutes = calls.reduce((s, c) => s + (c.duration_ms || 0) / 60000, 0);
     const usageSek = parseFloat((totalMinutes * PER_MINUTE_SEK).toFixed(2));
-    const totalSek = parseFloat((usageSek + STATIC_MONTHLY_SEK).toFixed(2));
+
+    const smsDocs = smsSnap.docs.map((d) => d.data());
+    const smsCount = smsDocs.length;
+    const smsSek = parseFloat(smsDocs.reduce((s, m) => s + (m.cost_customer_sek || 0), 0).toFixed(2));
+
+    const totalSek = parseFloat((usageSek + STATIC_MONTHLY_SEK + smsSek).toFixed(2));
 
     const invoiceDate = `${year}-${String(mon).padStart(2, "0")}-01`;
     // Due date = 1st of the following month
@@ -141,6 +154,13 @@ router.post("/:tenantId/:month/create", async (req, res) => {
             Unit: "min",
             VAT: 25,
           },
+          ...(smsCount > 0 ? [{
+            Description: `SMS-notifieringar (${smsCount} st)`,
+            Price: 3.50,
+            DeliveredQuantity: String(smsCount),
+            Unit: "st",
+            VAT: 25,
+          }] : []),
         ],
       },
     };
@@ -158,6 +178,8 @@ router.post("/:tenantId/:month/create", async (req, res) => {
       total_minutes: parseFloat(totalMinutes.toFixed(4)),
       usage_sek: usageSek,
       static_sek: STATIC_MONTHLY_SEK,
+      sms_count: smsCount,
+      sms_sek: smsSek,
       total_sek: totalSek,
       created_at: FieldValue.serverTimestamp(),
     };
