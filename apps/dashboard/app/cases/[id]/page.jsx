@@ -7,6 +7,7 @@ import { effectiveScope } from "@/lib/tenant-map";
 import { getCase, listSms, listCalls, getTenant, getCall } from "@/lib/control-plane";
 import { AppShell } from "../../components/AppShell";
 import { Icon } from "../../components/Icon";
+import { CallSuggestButton } from "../../components/CallSuggestButton";
 
 const STATUS_META = {
   READY:        { label: "Klar för jurist", tone: "success" },
@@ -184,9 +185,11 @@ export default async function CaseDetail({ params, searchParams }) {
   const smsSessions = smsRes.sessions || [];
   const callsForPhone = (callsRes.calls || []).filter(c => c.from_number === caseDoc.phone);
 
-  // Hydrate transcripts when missing
+  // Hydrate transcripts for all calls from this phone number.
+  // The list response already includes transcripts for most calls — getCall is
+  // only needed for very old docs that predate transcript storage.
   const callsWithTranscripts = await Promise.all(
-    callsForPhone.slice(0, 5).map(async (c) => {
+    callsForPhone.map(async (c) => {
       if (Array.isArray(c.transcript) && c.transcript.length > 0) return c;
       try { return await getCall(c.call_control_id); } catch { return c; }
     })
@@ -281,7 +284,7 @@ export default async function CaseDetail({ params, searchParams }) {
           ) : (
             <div className="space-y-3">
               {events.map((e, i) => e.type === "call"
-                ? <CallEvent key={`c-${i}`} call={e.data} />
+                ? <CallEvent key={`c-${i}`} call={e.data} tenantId={tenantId} />
                 : <SmsEvent key={`s-${i}`} event={e} />
               )}
             </div>
@@ -331,8 +334,17 @@ function Field({ label, value, mono, emptyHint }) {
   );
 }
 
-function CallEvent({ call }) {
+function CallEvent({ call, tenantId }) {
   const transcript = Array.isArray(call.transcript) ? call.transcript : [];
+  const callContext = {
+    call_control_id: call.call_control_id,
+    from_number: call.from_number,
+    initiated_at: call.initiated_at?._seconds
+      ? new Date(call.initiated_at._seconds * 1000).toISOString()
+      : null,
+    summary: call.summary?.summary?.slice(0, 200) || null,
+  };
+
   return (
     <article className="bg-surface border border-line rounded-lg overflow-hidden">
       <header className="px-5 py-3 border-b border-line flex items-center justify-between bg-line-soft/40">
@@ -347,6 +359,7 @@ function CallEvent({ call }) {
             </div>
           </div>
         </div>
+        <CallSuggestButton tenantId={tenantId} callContext={callContext} label="Förbättra agenten" />
       </header>
       <div className="p-5 space-y-4">
         {call.summary?.summary && (
