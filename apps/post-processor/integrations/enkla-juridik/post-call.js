@@ -159,6 +159,22 @@ module.exports = async function enklaJuridikPostCall({ call, summary }) {
     });
     caseId = ref.id;
     caseAfter = { id: caseId, status: "WAITING_SMS", active: true };
+
+    // The old case is SENT — but its Pipefy card should still receive the new summary.
+    // Append the new summary to the old case and re-sync, so Pipefy stays up to date.
+    if (existingCase?.pipefy_card_id && summaryText) {
+      try {
+        const mergedOld = appendSummary(existingCase.summary, summaryText);
+        await getDb().collection(CASES).doc(existingCase.id).set(
+          { summary: mergedOld, updatedAt: FieldValue.serverTimestamp() },
+          { merge: true }
+        );
+        await postJson("/pipefy/sync", { case_id: existingCase.id });
+        log("integration_pipefy_summary_updated", { tenant_id: TENANT_ID, case_id: existingCase.id });
+      } catch (err) {
+        logError("integration_pipefy_summary_update_failed", { tenant_id: TENANT_ID, case_id: existingCase.id, error: err.message });
+      }
+    }
   }
 
   // Recompute status — does the case (after this call's update) have contact info?

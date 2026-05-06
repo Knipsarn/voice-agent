@@ -44,8 +44,15 @@
         { "fieldPath": "active", "order": "ASCENDING" },
         { "fieldPath": "createdAt", "order": "DESCENDING" }
       ]
-    }
-  ],
+    },
+    {
+      "collectionGroup": "cases",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "pipefy_card_id", "order": "ASCENDING" },
+        { "fieldPath": "last_call_at", "order": "ASCENDING" }
+      ]
+    },
     {
       "collectionGroup": "prompt_suggestions",
       "queryScope": "COLLECTION",
