@@ -34,6 +34,7 @@ const casesRouter = require("./routes/cases");
 const smsRouter = require("./routes/sms");
 const pipefyRouter = require("./routes/pipefy");
 const pipefyAutoSyncRouter = require("./routes/pipefy-auto-sync");
+const promptRouter = require("./routes/prompt");
 
 const app = express();
 app.use(express.json());
@@ -84,6 +85,7 @@ app.use("/cases", casesRouter);
 app.use("/sms", smsRouter);
 app.use("/pipefy", pipefyRouter);
 app.use("/pipefy", pipefyAutoSyncRouter);
+app.use("/prompt", promptRouter);
 
 // ── 404 ──────────────────────────────────────────────────────────────────────
 app.use((req, res) => {

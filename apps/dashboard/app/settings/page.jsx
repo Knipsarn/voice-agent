@@ -6,6 +6,7 @@ import { effectiveScope } from "@/lib/tenant-map";
 import { getSettings, getFortnoxStatus, getTenant, listCalls } from "@/lib/control-plane";
 import { AppShell } from "../components/AppShell";
 import { SettingsForm } from "../components/SettingsForm";
+import { PromptSuggestionForm } from "../components/PromptSuggestionForm";
 import { RATES } from "@/lib/pricing";
 
 const STATIC_MONTHLY_SEK = parseFloat(process.env.STATIC_MONTHLY_FEE_SEK || "1000");
@@ -105,6 +106,24 @@ export default async function SettingsPage({ searchParams }) {
           isAdmin={scope.admin}
           fortnoxConnected={!!fortnoxStatus?.connected}
         />
+
+        {/* Admin: Manage agent prompt */}
+        {scope.admin && tenantId && (
+          <section className="bg-surface border border-line rounded-lg p-6 space-y-3">
+            <h2 className="text-[11px] uppercase tracking-widest text-muted font-semibold">Agent prompt</h2>
+            <a
+              href={`/admin/prompt/${encodeURIComponent(tenantId)}`}
+              className="inline-flex items-center gap-2 text-sm text-ink hover:text-accent transition-colors font-medium"
+            >
+              Manage agent prompt &rarr;
+            </a>
+          </section>
+        )}
+
+        {/* Customer: prompt suggestion form */}
+        {!scope.admin && tenantId && (
+          <PromptSuggestionForm tenantId={tenantId} />
+        )}
 
         {/* Admin: Fortnox connection */}
         {scope.admin && (

@@ -34,6 +34,19 @@ function getDb() {
   return db;
 }
 
+// Single-case partial sync — called by post-processor when a new case is created.
+// Works with partial data (no name/email gate). Creates or updates the Pipefy card.
+router.post("/sync-partial", async (req, res) => {
+  const { case_id } = req.body || {};
+  if (!case_id) return res.status(400).json({ error: "case_id required" });
+  try {
+    const result = await syncPipefyPartial(case_id);
+    res.json(result);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 router.post("/auto-sync", async (req, res) => {
   const startedAt = Date.now();
   const results = [];

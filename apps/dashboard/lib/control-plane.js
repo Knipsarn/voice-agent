@@ -173,3 +173,15 @@ export async function listVoicemails(tenantId, { limit = 50 } = {}) {
 export async function markVoicemailRead(id, by) {
   return cpJson("POST", `/voicemail/${encodeURIComponent(id)}/read`, { by });
 }
+
+export async function getPrompt(tenantId) {
+  return cpGet(`/prompt/${encodeURIComponent(tenantId)}`);
+}
+
+export async function updatePromptSection(tenantId, section, content) {
+  return cpJson("PATCH", `/prompt/${encodeURIComponent(tenantId)}`, { section, content });
+}
+
+export async function submitPromptSuggestion(tenantId, text, email) {
+  return cpJson("POST", `/prompt/${encodeURIComponent(tenantId)}/suggest`, { text, submitted_by: email });
+}
