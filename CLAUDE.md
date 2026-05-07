@@ -93,7 +93,62 @@ Git (authoring) --publish--> Firestore (runtime)
 
 ---
 
-## 4. Tenant config schema
+## 4. Control-plane API — use this, not gcloud
+
+**The control-plane is the operator interface for all runtime data. Never reach for `gcloud` or direct Firestore SDK calls when the control-plane API already covers it.**
+
+The service account on Cloud Run has Firestore access. The control-plane runs 24/7 with valid credentials. You have an API key. Use it.
+
+### When to use the control-plane API (not gcloud)
+
+| Task | Use this |
+|------|---------|
+| Read a case by phone/ID | `GET /cases?tenant_id=X&phone=Y` or `GET /cases/:id` |
+| Check Pipefy sync state | `GET /cases?tenant_id=X&phone=Y` (has `pipefy_card_id`, `pipefy_synced_at`) |
+| Trigger a Pipefy sync | `POST /pipefy/sync-partial` `{ case_id }` |
+| Verify Pipefy field IDs | `GET /pipefy/health` |
+| Read incidents | `GET /incidents` |
+| Read call sessions | `GET /calls?tenant_id=X` |
+| Read SMS sessions | `GET /sms?tenant_id=X` |
+| Check tenant Firestore state | `GET /tenants/:id` or `node scripts/ops/tenant-get.js` |
+| Read/edit prompt sections | `GET /prompt/:tenantId`, `PATCH /prompt/:tenantId` |
+| Trigger auto-sync jobs | `POST /pipefy/auto-sync`, `POST /sms/reminders/run` |
+
+### When gcloud IS needed
+
+Only use `gcloud` for infrastructure operations the control-plane doesn't cover:
+- Creating/listing Cloud Run services, Cloud Build triggers
+- Secret Manager (creating secrets, adding versions)
+- Cloud Scheduler (creating/modifying jobs)
+- Pub/Sub (creating topics/subscriptions)
+- Firestore indexes (`firebase deploy --only firestore:indexes`)
+- IAM policy changes
+
+### How to call the control-plane
+
+```js
+const { get, post } = require('./scripts/ops/_client');
+
+// Read cases
+get('/cases?tenant_id=enkla-juridik&phone=%2B46767742577')
+  .then(r => r.body.cases)
+
+// Trigger a sync
+post('/pipefy/sync-partial', { case_id: 'abc123' })
+  .then(r => r.body)
+```
+
+Or use curl:
+```bash
+curl -H "Authorization: Bearer $CONTROL_PLANE_API_KEY" \
+  https://control-plane-service-360579353014.europe-west1.run.app/cases?tenant_id=enkla-juridik
+```
+
+**Rule: if you find yourself writing `gcloud firestore` or importing `@google-cloud/firestore` locally to debug something, stop and use the control-plane API instead.**
+
+---
+
+## 5. Tenant config schema
 
 ```json
 {
@@ -548,6 +603,14 @@ Exception: if the fix is a single obvious config value (e.g. `"enabled": false �
 ### Every new GCP resource → update setup.sh
 
 When adding any new Cloud Scheduler job, Pub/Sub subscription, log sink, or Secret Manager secret, the `infrastructure/setup.sh` script must be updated in the same PR/commit. This keeps the infrastructure reproducible.
+
+---
+
+### Use the control-plane API, not gcloud, for runtime data
+
+The control-plane runs on Cloud Run with a service account that has full Firestore access. It is the correct tool for reading and writing runtime data. Reaching for `gcloud firestore` or a local Firestore SDK import is always the wrong move — it requires local gcloud auth that expires, and it bypasses the operator API that already exists for this purpose.
+
+**If you need to inspect a case, check Pipefy sync state, read incidents, or trigger any runtime operation — call the control-plane HTTP API via `scripts/ops/_client.js` or curl. Only use gcloud for infrastructure operations (Cloud Run, Scheduler, Secret Manager, IAM) that the control-plane doesn't cover.**
 
 ---
 
