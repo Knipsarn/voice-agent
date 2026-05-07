@@ -96,9 +96,20 @@ async function cardExists(cardId) {
   if (!cardId) return false;
   try {
     const res = await gql(`query { card(id: "${cardId}") { id } }`);
+    if (res.errors) {
+      const msg = (res.errors[0]?.message || "").toLowerCase();
+      // "not found" / "record not found" → card deleted, safe to create new
+      if (msg.includes("not found") || msg.includes("doesn't exist")) return false;
+      // Any other error (permission denied, network, etc.) → assume card still exists
+      // to avoid creating duplicates on transient errors
+      console.warn(JSON.stringify({ event: "pipefy_card_exists_check_error", card_id: cardId, error: res.errors[0]?.message }));
+      return true;
+    }
     return !!res.data?.card?.id;
-  } catch {
-    return false;
+  } catch (err) {
+    // Network/parse error — assume card exists to avoid duplicates
+    console.warn(JSON.stringify({ event: "pipefy_card_exists_check_failed", card_id: cardId, error: err.message }));
+    return true;
   }
 }
 
