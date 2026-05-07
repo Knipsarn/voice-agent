@@ -23,7 +23,7 @@ steps:
       - --region=europe-west1
       - --project=ldk-clean
       - --update-secrets=NEXTAUTH_SECRET=NEXTAUTH_SECRET:latest,GOOGLE_CLIENT_ID=GOOGLE_CLIENT_ID:latest,GOOGLE_CLIENT_SECRET=GOOGLE_CLIENT_SECRET:latest,CONTROL_PLANE_API_KEY=CONTROL_PLANE_API_KEY:latest
-      - --set-env-vars=CONTROL_PLANE_BASE_URL=https://control-plane-service-360579353014.europe-west1.run.app,DASHBOARD_ADMIN_EMAILS=nils.wahlin@snmintegrations.se,NEXTAUTH_URL=https://dashboard-service-360579353014.europe-west1.run.app
+      - --set-env-vars=CONTROL_PLANE_BASE_URL=https://control-plane-service-360579353014.europe-west1.run.app,DASHBOARD_ADMIN_EMAILS=nils.wahlin@snmintegrations.se,NEXTAUTH_URL=https://app.finnai.se
       - --allow-unauthenticated
       - --no-cpu-throttling
       - --min-instances=0
