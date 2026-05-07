@@ -69,18 +69,26 @@ function gql(query, variables = {}) {
   });
 }
 
+// Hardcoded field IDs from pipe 1035948 (queried 2026-05-07).
+// These are stable Pipefy IDs — they don't change when labels are renamed.
+// If a field is missing from a card, Pipefy silently ignores it on create.
+const FIELD_IDS = {
+  name:    "what_s_your_name",
+  phone:   "telefonnummer_1",
+  email:   "what_s_your_email",
+  city:    "ort",
+  summary: "kundens_initiala_meddelande",
+};
+
 let pipeCache = null;
 async function getPipeFields() {
   if (pipeCache) return pipeCache;
   const res = await gql(`
     query { pipe(id: "${PIPE_ID}") {
-      start_form_fields { id label }
       phases { id }
     }}
   `);
-  const fieldMap = {};
-  for (const f of res.data.pipe.start_form_fields) fieldMap[f.label] = f.id;
-  pipeCache = { fieldMap, firstPhaseId: res.data.pipe.phases[0]?.id };
+  pipeCache = { firstPhaseId: res.data.pipe.phases[0]?.id };
   return pipeCache;
 }
 
@@ -94,17 +102,14 @@ async function cardExists(cardId) {
   }
 }
 
-function buildAttrs(fieldMap, caseDoc) {
-  const pairs = [
-    ["Namn",                          caseDoc.name || "Okänd"],
-    ["Telefonnummer",                 caseDoc.phone],
-    ["Email",                         caseDoc.email],
-    ["Ort",                           caseDoc.city],
-    ["Kundens initiala meddelande",   caseDoc.summary],
-  ];
-  return pairs
-    .filter(([label, val]) => val && fieldMap[label])
-    .map(([label, val]) => ({ field_id: fieldMap[label], field_value: String(val) }));
+function buildAttrs(caseDoc) {
+  return [
+    { field_id: FIELD_IDS.name,    field_value: String(caseDoc.name || "Okänd") },
+    caseDoc.phone   && { field_id: FIELD_IDS.phone,   field_value: String(caseDoc.phone) },
+    caseDoc.email   && { field_id: FIELD_IDS.email,   field_value: String(caseDoc.email) },
+    caseDoc.city    && { field_id: FIELD_IDS.city,    field_value: String(caseDoc.city) },
+    caseDoc.summary && { field_id: FIELD_IDS.summary, field_value: String(caseDoc.summary) },
+  ].filter(Boolean);
 }
 
 /**
@@ -125,7 +130,7 @@ async function syncPipefyForCase(caseId) {
     return { ok: false, skipped: "missing_contact_info", case_id: caseId };
   }
 
-  const { fieldMap, firstPhaseId } = await getPipeFields();
+  const { firstPhaseId } = await getPipeFields();
   const title = caseDoc.name || "Nytt ärende";
 
   // Verify existing card still exists in Pipefy
@@ -135,7 +140,7 @@ async function syncPipefyForCase(caseId) {
 
   if (!cardId) {
     // CREATE
-    const attrs = buildAttrs(fieldMap, caseDoc);
+    const attrs = buildAttrs(caseDoc);
     const res = await gql(`
       mutation CreateCard($pipeId: ID!, $phaseId: ID!, $title: String!, $attrs: [FieldValueInput!]!) {
         createCard(input: { pipe_id: $pipeId, phase_id: $phaseId, title: $title, fields_attributes: $attrs }) {
@@ -153,7 +158,7 @@ async function syncPipefyForCase(caseId) {
       }
     `, { id: cardId, title });
 
-    const values = buildAttrs(fieldMap, caseDoc).map((a) => ({
+    const values = buildAttrs(caseDoc).map((a) => ({
       fieldId: a.field_id,
       value: a.field_value,
     }));
@@ -206,7 +211,7 @@ async function syncPipefyPartial(caseId) {
     return { ok: false, skipped: "missing_phone", case_id: caseId };
   }
 
-  const { fieldMap, firstPhaseId } = await getPipeFields();
+  const { firstPhaseId } = await getPipeFields();
   const title = caseDoc.name || caseDoc.phone || "Nytt ärende";
 
   // Verify existing card still exists in Pipefy
@@ -216,7 +221,7 @@ async function syncPipefyPartial(caseId) {
 
   if (!cardId) {
     // CREATE
-    const attrs = buildAttrs(fieldMap, caseDoc);
+    const attrs = buildAttrs(caseDoc);
     const res = await gql(`
       mutation CreateCard($pipeId: ID!, $phaseId: ID!, $title: String!, $attrs: [FieldValueInput!]!) {
         createCard(input: { pipe_id: $pipeId, phase_id: $phaseId, title: $title, fields_attributes: $attrs }) {
@@ -234,7 +239,7 @@ async function syncPipefyPartial(caseId) {
       }
     `, { id: cardId, title });
 
-    const values = buildAttrs(fieldMap, caseDoc).map((a) => ({
+    const values = buildAttrs(caseDoc).map((a) => ({
       fieldId: a.field_id,
       value: a.field_value,
     }));
