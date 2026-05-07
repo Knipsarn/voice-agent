@@ -23,7 +23,7 @@
 const express = require("express");
 const router = express.Router();
 const { Firestore, Timestamp } = require("@google-cloud/firestore");
-const { syncPipefyPartial } = require("../lib/pipefy-sync");
+const { syncPipefyPartial, verifyPipefyFields } = require("../lib/pipefy-sync");
 
 const CAP = 50;
 const TWELVE_HOURS_MS = 12 * 60 * 60 * 1000;
@@ -33,6 +33,17 @@ function getDb() {
   if (!db) db = new Firestore({ projectId: process.env.GOOGLE_CLOUD_PROJECT || "ldk-clean" });
   return db;
 }
+
+// Health check — verifies all hardcoded field IDs exist in the Pipefy pipe.
+// Call anytime to catch field mismatches before they cause silent failures.
+router.get("/health", async (req, res) => {
+  try {
+    const result = await verifyPipefyFields();
+    res.status(result.ok ? 200 : 500).json(result);
+  } catch (err) {
+    res.status(500).json({ ok: false, error: err.message });
+  }
+});
 
 // Single-case partial sync — called by post-processor when a new case is created.
 // Works with partial data (no name/email gate). Creates or updates the Pipefy card.

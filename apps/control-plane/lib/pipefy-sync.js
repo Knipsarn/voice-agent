@@ -103,13 +103,26 @@ async function cardExists(cardId) {
 }
 
 function buildAttrs(caseDoc) {
-  return [
+  const attrs = [
     { field_id: FIELD_IDS.name,    field_value: String(caseDoc.name || "Okänd") },
     caseDoc.phone   && { field_id: FIELD_IDS.phone,   field_value: String(caseDoc.phone) },
     caseDoc.email   && { field_id: FIELD_IDS.email,   field_value: String(caseDoc.email) },
     caseDoc.city    && { field_id: FIELD_IDS.city,    field_value: String(caseDoc.city) },
     caseDoc.summary && { field_id: FIELD_IDS.summary, field_value: String(caseDoc.summary) },
   ].filter(Boolean);
+
+  // Warn loudly if summary is missing — this is the field that's been most broken
+  if (!caseDoc.summary) {
+    console.warn(JSON.stringify({
+      event:   "pipefy_sync_missing_summary",
+      case_id: caseDoc.id || "unknown",
+      phone:   caseDoc.phone,
+      status:  caseDoc.status,
+      warning: "summary field empty — Kundens initiala meddelande will not be written to Pipefy",
+    }));
+  }
+
+  return attrs;
 }
 
 /**
@@ -277,4 +290,20 @@ async function syncPipefyPartial(caseId) {
   return { ok: true, case_id: caseId, pipefy_card_id: cardId, action, status: firestoreUpdate.status };
 }
 
-module.exports = { syncPipefyForCase, syncPipefyPartial };
+/**
+ * Verifies all hardcoded field IDs exist in the pipe's start form.
+ * Call from GET /pipefy/health to catch field mismatches before they silently fail.
+ * Returns { ok, missing, found }
+ */
+async function verifyPipefyFields() {
+  const res = await gql(`query { pipe(id: "${PIPE_ID}") { start_form_fields { id label } } }`);
+  const liveIds = new Set(res.data.pipe.start_form_fields.map(f => f.id));
+  const results = {};
+  for (const [key, id] of Object.entries(FIELD_IDS)) {
+    results[key] = { id, found: liveIds.has(id) };
+  }
+  const missing = Object.entries(results).filter(([, v]) => !v.found).map(([k]) => k);
+  return { ok: missing.length === 0, missing, fields: results };
+}
+
+module.exports = { syncPipefyForCase, syncPipefyPartial, verifyPipefyFields };
