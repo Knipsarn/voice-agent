@@ -123,6 +123,27 @@ router.get("/:id", async (req, res) => {
   }
 });
 
+// ── PATCH /tenants/:id/voice ─────────────────────────────────────────────────
+const ALLOWED_VOICES = ["alloy", "ash", "ballad", "cedar", "coral", "echo", "marin", "sage", "shimmer", "verse"];
+
+router.patch("/:id/voice", async (req, res) => {
+  const { voice } = req.body || {};
+  if (!voice) return res.status(400).json({ error: "voice required" });
+  if (!ALLOWED_VOICES.includes(voice)) {
+    return res.status(400).json({ error: `Invalid voice. Allowed: ${ALLOWED_VOICES.join(", ")}` });
+  }
+  try {
+    const ref = db.collection("tenants").doc(req.params.id);
+    const doc = await ref.get();
+    if (!doc.exists) return res.status(404).json({ error: `Tenant not found: ${req.params.id}` });
+    await ref.set({ voice, _meta: { ...doc.data()._meta, voice_updated_at: new Date().toISOString(), voice_updated_source: "dashboard" } }, { merge: true });
+    console.log(JSON.stringify({ event: "voice_updated", tenant_id: req.params.id, voice }));
+    res.json({ ok: true, tenant_id: req.params.id, voice });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // ── GET /tenants/:id/meta ────────────────────────────────────────────────────
 router.get("/:id/meta", async (req, res) => {
   try {

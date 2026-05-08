@@ -42,6 +42,10 @@ export async function getTenant(tenantId) {
   return cpGet(`/tenants/${encodeURIComponent(tenantId)}`);
 }
 
+export async function patchVoice(tenantId, voice) {
+  return cpJson("PATCH", `/tenants/${encodeURIComponent(tenantId)}/voice`, { voice });
+}
+
 export async function listNumbersForTenant(tenantId) {
   return cpGet(`/numbers?tenant=${encodeURIComponent(tenantId)}`);
 }

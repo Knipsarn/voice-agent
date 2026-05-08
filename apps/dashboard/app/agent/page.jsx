@@ -7,6 +7,7 @@ import { getTenant, listNumbersForTenant, getSettings } from "@/lib/control-plan
 import { AppShell } from "../components/AppShell";
 import { Icon } from "../components/Icon";
 import { GreetingEditor } from "../components/GreetingEditor";
+import { VoicePicker } from "../components/VoicePicker";
 
 function pickTenantId(scope, searchParams) {
   if (scope.admin) return searchParams?.tenant || null;
@@ -86,18 +87,13 @@ export default async function AgentPage({ searchParams }) {
           isOverride={!!settings?.first_message}
         />
 
-        {/* Voice & language — read-only display */}
+        {/* Voice & language */}
         <Card title="Röst & språk">
-          <Row label="Röst" value={tenant.voice} mono />
+          <VoicePicker tenantId={tenantId} initialVoice={tenant.voice} />
           <Row label="Språk" value={tenant.default_language} mono />
           {scope.admin && <Row label="Realtime model" value={tenant.realtime_model} mono />}
           {scope.admin && <Row label="Entry mode" value={tenant.entry_mode} mono />}
           {scope.admin && <Row label="Status" value={tenant.status} mono />}
-          {!scope.admin && (
-            <p className="text-xs text-subtle mt-3 pt-3 border-t border-line">
-              Behöver du byta röst eller språk? Skicka in ett förslag via knappen i sidofältet.
-            </p>
-          )}
         </Card>
 
         {/* Phone numbers */}
