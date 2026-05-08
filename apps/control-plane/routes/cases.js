@@ -99,6 +99,18 @@ router.patch("/:id", async (req, res) => {
   }
 });
 
+router.delete("/:id", async (req, res) => {
+  try {
+    const ref = getDb().collection(COLLECTION).doc(req.params.id);
+    const existing = await ref.get();
+    if (!existing.exists) return res.status(404).json({ error: "Case not found" });
+    await ref.delete();
+    res.json({ ok: true, id: req.params.id });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
 function serializeDoc(snap) {

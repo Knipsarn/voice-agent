@@ -8,6 +8,7 @@ import { AppShell } from "../components/AppShell";
 import { Icon } from "../components/Icon";
 import { GreetingEditor } from "../components/GreetingEditor";
 import { VoiceModelPicker } from "../components/VoiceModelPicker";
+import { MySuggestionsPanel } from "../components/MySuggestionsPanel";
 
 function pickTenantId(scope, searchParams) {
   if (scope.admin) return searchParams?.tenant || null;
@@ -166,6 +167,11 @@ export default async function AgentPage({ searchParams }) {
             </pre>
           </Card>
         )}
+
+        {/* Suggestions */}
+        <Card title="Mina förslag">
+          <MySuggestionsPanel tenantId={tenantId} />
+        </Card>
 
         {scope.admin && tenant._meta && (
           <Card title="Configuration metadata">

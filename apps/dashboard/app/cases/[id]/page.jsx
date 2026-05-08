@@ -9,6 +9,7 @@ import { AppShell } from "../../components/AppShell";
 import { Icon } from "../../components/Icon";
 import { CallSuggestButton } from "../../components/CallSuggestButton";
 import { CollapsibleCallEvent } from "../../components/CollapsibleCallEvent";
+import { DeleteCaseButton } from "../../components/DeleteCaseButton";
 
 const STATUS_META = {
   READY:        { label: "Klar för jurist", tone: "success" },
@@ -249,9 +250,12 @@ export default async function CaseDetail({ params, searchParams }) {
               Skapad {formatTime(caseDoc.createdAt, true)}
             </div>
           </div>
-          <span className={`text-xs uppercase tracking-wider font-semibold px-3 py-1.5 rounded-full border ${TONE_CLS[meta.tone]}`}>
-            {meta.label}
-          </span>
+          <div className="flex items-center gap-3">
+            <span className={`text-xs uppercase tracking-wider font-semibold px-3 py-1.5 rounded-full border ${TONE_CLS[meta.tone]}`}>
+              {meta.label}
+            </span>
+            <DeleteCaseButton caseId={caseDoc.id} backHref={backHref} />
+          </div>
         </header>
 
         {/* What happens next — schedule panel */}

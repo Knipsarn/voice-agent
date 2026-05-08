@@ -160,6 +160,10 @@ export async function getCase(caseId) {
   return cpGet(`/cases/${encodeURIComponent(caseId)}`);
 }
 
+export async function deleteCase(caseId) {
+  return cpJson("DELETE", `/cases/${encodeURIComponent(caseId)}`, {});
+}
+
 export async function listSms(tenantId, { caseId, status, limit = 50 } = {}) {
   const params = new URLSearchParams();
   params.set("tenant_id", tenantId);
