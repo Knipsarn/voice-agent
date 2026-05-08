@@ -98,8 +98,8 @@ async function findActiveCaseByPhone(phone) {
 
 function appendSummary(existingSummary, newSummary) {
   if (!newSummary) return existingSummary || null;
-  const ts = new Date().toISOString().slice(0, 16).replace("T", " ");
-  const block = `---\nSamtal ${ts}\n${newSummary}`;
+  const ts = new Date().toLocaleString("sv-SE", { timeZone: "Europe/Stockholm", year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" }).replace(",", "");
+  const block = `---\nSamtal ${ts}\nFRÅN AI-VÄXELN:\n${newSummary}`;
   return existingSummary ? `${existingSummary}\n\n${block}` : block;
 }
 
