@@ -8,6 +8,7 @@ import { AppShell } from "../components/AppShell";
 import { Icon } from "../components/Icon";
 import { GreetingEditor } from "../components/GreetingEditor";
 import { VoicePicker } from "../components/VoicePicker";
+import { ModelPicker } from "../components/ModelPicker";
 
 function pickTenantId(scope, searchParams) {
   if (scope.admin) return searchParams?.tenant || null;
@@ -89,9 +90,9 @@ export default async function AgentPage({ searchParams }) {
 
         {/* Voice & language */}
         <Card title="Röst & språk">
-          <VoicePicker tenantId={tenantId} initialVoice={tenant.voice} />
+          <VoicePicker tenantId={tenantId} initialVoice={tenant.voice} currentModel={tenant.realtime_model} />
           <Row label="Språk" value={tenant.default_language} mono />
-          {scope.admin && <Row label="Realtime model" value={tenant.realtime_model} mono />}
+          {scope.admin && <ModelPicker tenantId={tenantId} initialModel={tenant.realtime_model} />}
           {scope.admin && <Row label="Entry mode" value={tenant.entry_mode} mono />}
           {scope.admin && <Row label="Status" value={tenant.status} mono />}
         </Card>
