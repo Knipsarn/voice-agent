@@ -246,18 +246,17 @@ wss.on("connection", async (phoneWs, req) => {
 
   // --- OpenAI Realtime session ---
   const isGAModel = realtimeModel !== "gpt-realtime-1.5";
-  // GA API: voice in URL. Beta API: voice in session.update payload.
-  const openaiUrl = isGAModel
-    ? `wss://api.openai.com/v1/realtime?model=${realtimeModel}&voice=${voice}`
-    : `wss://api.openai.com/v1/realtime?model=${realtimeModel}`;
 
-  const openaiWs = new WebSocket(openaiUrl, {
-    headers: {
-      Authorization: `Bearer ${OPENAI_API_KEY}`,
-      // Beta header required for gpt-realtime-1.5; GA models reject it
-      ...(isGAModel ? {} : { "OpenAI-Beta": "realtime=v1" }),
+  const openaiWs = new WebSocket(
+    `wss://api.openai.com/v1/realtime?model=${realtimeModel}`,
+    {
+      headers: {
+        Authorization: `Bearer ${OPENAI_API_KEY}`,
+        // Beta header required for gpt-realtime-1.5; GA models reject it
+        ...(isGAModel ? {} : { "OpenAI-Beta": "realtime=v1" }),
+      }
     }
-  });
+  );
 
   let openaiReady = false;
 
@@ -271,44 +270,70 @@ wss.on("connection", async (phoneWs, req) => {
       latency_ms: openaiReadyTime - callStart,
     });
 
-    // GA API (gpt-realtime-2+): type required, voice set in URL not session.
-    // Beta API (gpt-realtime-1.5): no type field, voice in session.
-    const sessionPayload = {
-      ...(isGAModel ? { type: "realtime" } : { voice }),
-      instructions,
-      input_audio_format: audioFormat,
-      output_audio_format: audioFormat
-    };
+    // Map internal audio format string to API format objects
+    const gaAudioFormat = audioFormat === "g711_ulaw"
+      ? { type: "audio/pcmu", rate: 8000 }
+      : { type: "audio/pcm", rate: 24000 };
 
-    // Always enable transcription so user speech is logged; language hint is optional.
-    sessionPayload.input_audio_transcription = { model: "whisper-1" };
-    if (transcriptionLanguage) {
-      sessionPayload.input_audio_transcription.language = transcriptionLanguage;
-    }
-
-    // VAD tuning — raise threshold for PSTN lines with echo/sidetone to prevent
-    // the agent's own audio from echoing back and triggering false user turns.
-    sessionPayload.turn_detection = {
-      type: "server_vad",
-      threshold: vadThreshold,
-      prefix_padding_ms: 300,
-      silence_duration_ms: 500,
-    };
-
-    // Build tool set: end_call only for leaf modes, transfer tools for workflow modes
+    // Build tools
+    let tools;
     if (workflowEnabled) {
       const transferTools = generateWorkflowTools(tenantConfig, currentMode);
-      sessionPayload.tools = initialModeType === "leaf"
-        ? [END_CALL_TOOL, ...transferTools]
-        : transferTools;
+      tools = initialModeType === "leaf" ? [END_CALL_TOOL, ...transferTools] : transferTools;
     } else {
-      sessionPayload.tools = [END_CALL_TOOL];
+      tools = [END_CALL_TOOL];
     }
-    sessionPayload.tool_choice = "auto";
 
-    // reasoning_effort only supported on gpt-realtime-2+
-    if (reasoningEffort && realtimeModel !== "gpt-realtime-1.5") {
-      sessionPayload.reasoning_effort = reasoningEffort;
+    let sessionPayload;
+
+    if (isGAModel) {
+      // GA API (gpt-realtime-2+) — nested audio object, renamed fields
+      sessionPayload = {
+        type: "realtime",
+        instructions,
+        tools,
+        tool_choice: "auto",
+        audio: {
+          input: {
+            format: gaAudioFormat,
+            transcription: {
+              model: "gpt-realtime-whisper",
+              ...(transcriptionLanguage && { language: transcriptionLanguage }),
+            },
+            turn_detection: {
+              type: "server_vad",
+              threshold: vadThreshold,
+              prefix_padding_ms: 300,
+              silence_duration_ms: 500,
+            },
+          },
+          output: {
+            format: gaAudioFormat,
+            voice,
+          },
+        },
+        ...(reasoningEffort && { reasoning: { effort: reasoningEffort } }),
+      };
+    } else {
+      // Beta API (gpt-realtime-1.5) — flat session fields
+      sessionPayload = {
+        voice,
+        instructions,
+        input_audio_format: audioFormat,
+        output_audio_format: audioFormat,
+        input_audio_transcription: {
+          model: "whisper-1",
+          ...(transcriptionLanguage && { language: transcriptionLanguage }),
+        },
+        turn_detection: {
+          type: "server_vad",
+          threshold: vadThreshold,
+          prefix_padding_ms: 300,
+          silence_duration_ms: 500,
+        },
+        tools,
+        tool_choice: "auto",
+      };
     }
 
     openaiWs.send(JSON.stringify({ type: "session.update", session: sessionPayload }));
@@ -404,7 +429,8 @@ wss.on("connection", async (phoneWs, req) => {
           }
           break;
 
-        case "response.audio_transcript.done":
+        case "response.audio_transcript.done":       // beta
+        case "response.output_audio_transcript.done": // GA
           if (msg.transcript) {
             log("assistant_transcript", { trace_id, tenant_id: tenantId || null, turn_assistant: turnCountAssistant + 1, text: msg.transcript });
             transcripts.push({ role: "agent", message: msg.transcript, time_in_call_secs: Math.round((Date.now() - callStart) / 1000) });
@@ -415,7 +441,8 @@ wss.on("connection", async (phoneWs, req) => {
           log("response_started", { trace_id, tenant_id: tenantId || null, turn_assistant: turnCountAssistant + 1 });
           break;
 
-        case "response.audio.delta":
+        case "response.audio.delta":        // beta
+        case "response.output_audio.delta": // GA
           if (msg.delta && !transferFired) {
             if (!firstAudioSent) {
               firstAudioSent = true;
