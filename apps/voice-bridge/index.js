@@ -722,16 +722,20 @@ wss.on("connection", async (phoneWs, req) => {
           method: "POST",
           headers: { "Content-Type": "application/json", "Content-Length": Buffer.byteLength(reqData) },
         }, (res) => {
-          log("webhook_sent", { trace_id, tenant_id: tenantId, status: res.statusCode });
+          if (res.statusCode >= 200 && res.statusCode < 300) {
+            log("webhook_sent", { trace_id, tenant_id: tenantId, status: res.statusCode });
+          } else {
+            logError("webhook_error", { trace_id, tenant_id: tenantId, status: res.statusCode });
+          }
           res.resume();
         });
         webhookReq.on("error", (err) => {
-          logError("webhook_error", { trace_id, tenant_id: tenantId, error: err.message });
+          logError("webhook_error", { trace_id, tenant_id: tenantId, error: err.message || String(err) });
         });
         webhookReq.write(reqData);
         webhookReq.end();
       } catch (err) {
-        logError("webhook_error", { trace_id, tenant_id: tenantId, error: err.message });
+        logError("webhook_error", { trace_id, tenant_id: tenantId, error: err.message || String(err) });
       }
     }
   }
