@@ -11,10 +11,11 @@ const CRM_TENANTS = new Set(["enkla-juridik"]);
 // suffix lets us preserve impersonation params (?as=customer&tenant=X) across nav clicks.
 // Without it, clicking "Ärenden" while impersonating drops the params and redirects to /admin.
 const TENANT_NAV = (tenantId, suffix = "") => [
-  { href: `/${suffix}`,             label: "Översikt", icon: "home" },
+  { href: `/${suffix}`,             label: "Översikt",      icon: "home" },
   { href: `/calls${suffix}`,        label: CRM_TENANTS.has(tenantId) ? "Ärenden" : "Samtal", icon: CRM_TENANTS.has(tenantId) ? "users" : "phone" },
   { href: `/agent${suffix}`,        label: "Min assistent", icon: "mic" },
   { href: `/settings${suffix}`,     label: "Inställningar", icon: "settings" },
+  { href: `/support${suffix}`,      label: "Support",       icon: "inbox" },
 ];
 
 const ADMIN_NAV = [
@@ -155,7 +156,7 @@ export function Sidebar({ email, admin, tenantId, tenantName, impersonating }) {
           ))}
         </nav>
 
-        {/* Footer: Suggest button + user */}
+        {/* Footer: quick compose button */}
         {tenantId && (
           <div className="px-3 pb-2">
             <button
@@ -163,7 +164,7 @@ export function Sidebar({ email, admin, tenantId, tenantName, impersonating }) {
               className="w-full flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-sm font-medium bg-ink text-white hover:bg-ink/85 transition-colors"
             >
               <Icon name="sparkles" size={15} />
-              Förbättra agenten
+              Nytt ärende
             </button>
           </div>
         )}
