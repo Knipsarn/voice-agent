@@ -1,6 +1,14 @@
 "use client";
 import { useState } from "react";
 
+const REASONING_LEVELS = [
+  { id: "minimal", label: "Minimal", latency: "~1.1s" },
+  { id: "low",     label: "Low",     latency: "~1.4s" },
+  { id: "medium",  label: "Medium",  latency: "~1.8s" },
+  { id: "high",    label: "High",    latency: "~2.1s" },
+  { id: "xhigh",   label: "Max",     latency: "~2.3s" },
+];
+
 const MODELS = [
   { id: "gpt-realtime-1.5", label: "gpt-realtime-1.5", tags: [] },
   { id: "gpt-realtime-2",   label: "gpt-realtime-2",   tags: ["BEST", "SMARTER"] },
@@ -40,11 +48,12 @@ async function save(url, body) {
   if (!res.ok) { const e = await res.json(); throw new Error(e.error || "Fel"); }
 }
 
-export function VoiceModelPicker({ tenantId, initialModel, initialVoice, isAdmin }) {
+export function VoiceModelPicker({ tenantId, initialModel, initialVoice, initialReasoning, isAdmin }) {
   const resolvedModel = initialModel || "gpt-realtime-1.5";
   const [model, setModel] = useState(resolvedModel);
   const [voice, setVoice] = useState(initialVoice || "marin");
-  const [status, setStatus] = useState(null); // null | "saving" | "saved" | "error"
+  const [reasoning, setReasoning] = useState(initialReasoning || "minimal");
+  const [status, setStatus] = useState(null);
 
   const availableVoices = VOICES_BY_MODEL[model] ?? VOICES_BY_MODEL["gpt-realtime-1.5"];
   const activeVoice = availableVoices.some(v => v.id === voice) ? voice : availableVoices[0]?.id;
@@ -68,6 +77,19 @@ export function VoiceModelPicker({ tenantId, initialModel, initialVoice, isAdmin
     } catch {
       setModel(resolvedModel);
       setVoice(initialVoice);
+      flash("error");
+    }
+  }
+
+  async function handleReasoningChange(newReasoning) {
+    if (newReasoning === reasoning) return;
+    setReasoning(newReasoning);
+    setStatus("saving");
+    try {
+      await save("/api/agent/reasoning", { tenant_id: tenantId, reasoning_effort: newReasoning });
+      flash("saved");
+    } catch {
+      setReasoning(reasoning);
       flash("error");
     }
   }
@@ -129,7 +151,7 @@ export function VoiceModelPicker({ tenantId, initialModel, initialVoice, isAdmin
       </div>
 
       {/* Step 2: Voice */}
-      <div>
+      <div className="mb-5">
         <p className="text-[11px] uppercase tracking-widest text-muted font-semibold mb-2">2 · Röst</p>
         <select
           value={activeVoice}
@@ -144,6 +166,31 @@ export function VoiceModelPicker({ tenantId, initialModel, initialVoice, isAdmin
           ))}
         </select>
       </div>
+
+      {/* Step 3: Reasoning effort — gpt-realtime-2 only */}
+      {model === "gpt-realtime-2" && isAdmin && (
+        <div>
+          <p className="text-[11px] uppercase tracking-widest text-muted font-semibold mb-2">3 · Reasoning effort</p>
+          <div className="flex gap-1.5">
+            {REASONING_LEVELS.map(level => (
+              <button
+                key={level.id}
+                onClick={() => handleReasoningChange(level.id)}
+                disabled={status === "saving"}
+                className={`flex-1 flex flex-col items-center px-2 py-2.5 rounded-lg border text-center transition-all ${
+                  reasoning === level.id
+                    ? "border-accent bg-accent/5"
+                    : "border-line hover:border-accent/50"
+                }`}
+              >
+                <span className="text-xs font-medium text-ink">{level.label}</span>
+                <span className="text-[10px] text-muted mt-0.5 mono">{level.latency}</span>
+              </button>
+            ))}
+          </div>
+          <p className="text-xs text-muted mt-2">Svarstid till första ljud. För en receptionist rekommenderas Minimal eller Low.</p>
+        </div>
+      )}
     </div>
   );
 }

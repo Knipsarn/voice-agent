@@ -126,6 +126,7 @@ router.get("/:id", async (req, res) => {
 // ── PATCH /tenants/:id/voice ─────────────────────────────────────────────────
 const ALLOWED_VOICES = ["alloy", "ash", "ballad", "cedar", "coral", "echo", "marin", "sage", "shimmer", "verse"];
 const ALLOWED_MODELS = ["gpt-realtime-1.5", "gpt-realtime-2"];
+const ALLOWED_REASONING = ["minimal", "low", "medium", "high", "xhigh"];
 
 router.patch("/:id/voice", async (req, res) => {
   const { voice } = req.body || {};
@@ -158,6 +159,24 @@ router.patch("/:id/model", async (req, res) => {
     await ref.set({ realtime_model: model, _meta: { ...doc.data()._meta, model_updated_at: new Date().toISOString(), model_updated_source: "dashboard" } }, { merge: true });
     console.log(JSON.stringify({ event: "model_updated", tenant_id: req.params.id, model }));
     res.json({ ok: true, tenant_id: req.params.id, model });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.patch("/:id/reasoning", async (req, res) => {
+  const { reasoning_effort } = req.body || {};
+  if (!reasoning_effort) return res.status(400).json({ error: "reasoning_effort required" });
+  if (!ALLOWED_REASONING.includes(reasoning_effort)) {
+    return res.status(400).json({ error: `Invalid reasoning_effort. Allowed: ${ALLOWED_REASONING.join(", ")}` });
+  }
+  try {
+    const ref = db.collection("tenants").doc(req.params.id);
+    const doc = await ref.get();
+    if (!doc.exists) return res.status(404).json({ error: `Tenant not found: ${req.params.id}` });
+    await ref.set({ reasoning_effort, _meta: { ...doc.data()._meta, reasoning_updated_at: new Date().toISOString() } }, { merge: true });
+    console.log(JSON.stringify({ event: "reasoning_updated", tenant_id: req.params.id, reasoning_effort }));
+    res.json({ ok: true, tenant_id: req.params.id, reasoning_effort });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }

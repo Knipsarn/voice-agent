@@ -93,6 +93,7 @@ export default async function AgentPage({ searchParams }) {
             tenantId={tenantId}
             initialModel={tenant.realtime_model || "gpt-realtime-1.5"}
             initialVoice={tenant.voice}
+            initialReasoning={tenant.reasoning_effort || "minimal"}
             isAdmin={scope.admin}
           />
         </Card>

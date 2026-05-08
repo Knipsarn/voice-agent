@@ -215,6 +215,7 @@ wss.on("connection", async (phoneWs, req) => {
 
   const voice = tenantConfig?.voice || DEFAULT_VOICE;
   const realtimeModel = tenantConfig?.realtime_model || DEFAULT_REALTIME_MODEL;
+  const reasoningEffort = tenantConfig?.reasoning_effort || null;
   const entryMode = tenantConfig?.entry_mode || "unknown";
   const firstMessage = !fallback && tenantConfig.first_message_enabled
     ? (tenantConfig.first_message || null)
@@ -300,6 +301,11 @@ wss.on("connection", async (phoneWs, req) => {
       sessionPayload.tools = [END_CALL_TOOL];
     }
     sessionPayload.tool_choice = "auto";
+
+    // reasoning_effort only supported on gpt-realtime-2+
+    if (reasoningEffort && realtimeModel !== "gpt-realtime-1.5") {
+      sessionPayload.reasoning_effort = reasoningEffort;
+    }
 
     openaiWs.send(JSON.stringify({ type: "session.update", session: sessionPayload }));
 

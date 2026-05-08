@@ -50,6 +50,10 @@ export async function patchModel(tenantId, model) {
   return cpJson("PATCH", `/tenants/${encodeURIComponent(tenantId)}/model`, { model });
 }
 
+export async function patchReasoning(tenantId, reasoning_effort) {
+  return cpJson("PATCH", `/tenants/${encodeURIComponent(tenantId)}/reasoning`, { reasoning_effort });
+}
+
 export async function listNumbersForTenant(tenantId) {
   return cpGet(`/numbers?tenant=${encodeURIComponent(tenantId)}`);
 }
