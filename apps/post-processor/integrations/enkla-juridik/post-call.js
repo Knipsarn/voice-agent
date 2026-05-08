@@ -205,7 +205,11 @@ module.exports = async function enklaJuridikPostCall({ call, summary }) {
   // status === WAITING_SMS — send SMS unless we sent one in the last hour
   // (avoid spamming on rapid back-to-back calls)
   const lastReminder = caseAfter.last_reminder?.toDate?.();
-  const recentlyContacted = lastReminder && ((Date.now() - lastReminder.getTime()) < 60 * 60 * 1000);
+  const lastSmsSent = caseAfter.last_sms_sent_at?.toDate?.();
+  const lastContact = lastSmsSent && lastReminder
+    ? new Date(Math.max(lastSmsSent.getTime(), lastReminder.getTime()))
+    : (lastSmsSent || lastReminder);
+  const recentlyContacted = lastContact && ((Date.now() - lastContact.getTime()) < 60 * 60 * 1000);
   if (recentlyContacted) {
     log("integration_sms_skip_recent", { tenant_id: TENANT_ID, case_id: caseId });
     return;
