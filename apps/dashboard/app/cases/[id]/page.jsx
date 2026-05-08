@@ -8,6 +8,7 @@ import { getCase, listSms, listCalls, getTenant, getCall } from "@/lib/control-p
 import { AppShell } from "../../components/AppShell";
 import { Icon } from "../../components/Icon";
 import { CallSuggestButton } from "../../components/CallSuggestButton";
+import { CollapsibleCallEvent } from "../../components/CollapsibleCallEvent";
 
 const STATUS_META = {
   READY:        { label: "Klar för jurist", tone: "success" },
@@ -37,17 +38,18 @@ function formatTime(ts, full = false) {
   const v = tsValue(ts);
   if (!v) return "—";
   const d = new Date(v);
-  return d.toLocaleString("sv-SE", { dateStyle: full ? "long" : "short", timeStyle: "short" });
+  return d.toLocaleString("sv-SE", { dateStyle: full ? "long" : "short", timeStyle: "short", timeZone: "Europe/Stockholm" });
 }
 function formatRelative(ts) {
   const v = tsValue(ts);
   if (!v) return "—";
   const d = new Date(v);
   const today = new Date(); today.setHours(0,0,0,0);
-  if (d >= today) return `idag ${d.toLocaleTimeString("sv-SE", { hour: "2-digit", minute: "2-digit" })}`;
+  const tz = { timeZone: "Europe/Stockholm" };
+  if (d >= today) return `idag ${d.toLocaleTimeString("sv-SE", { hour: "2-digit", minute: "2-digit", ...tz })}`;
   const yesterday = new Date(today); yesterday.setDate(yesterday.getDate() - 1);
-  if (d >= yesterday) return `igår ${d.toLocaleTimeString("sv-SE", { hour: "2-digit", minute: "2-digit" })}`;
-  return d.toLocaleString("sv-SE", { dateStyle: "short", timeStyle: "short" });
+  if (d >= yesterday) return `igår ${d.toLocaleTimeString("sv-SE", { hour: "2-digit", minute: "2-digit", ...tz })}`;
+  return d.toLocaleString("sv-SE", { dateStyle: "short", timeStyle: "short", ...tz });
 }
 function formatDuration(ms) {
   if (!ms) return "—";
@@ -284,7 +286,7 @@ export default async function CaseDetail({ params, searchParams }) {
           ) : (
             <div className="space-y-3">
               {events.map((e, i) => e.type === "call"
-                ? <CallEvent key={`c-${i}`} call={e.data} tenantId={tenantId} />
+                ? <CollapsibleCallEvent key={`c-${i}`} call={e.data} tenantId={tenantId} />
                 : <SmsEvent key={`s-${i}`} event={e} />
               )}
             </div>
@@ -311,7 +313,7 @@ function NextStepPanel({ next, caseDoc }) {
         <div className="text-xs uppercase tracking-widest text-muted font-semibold">Nästa steg</div>
         <div className="text-sm text-ink mt-1 leading-relaxed">{next.text}</div>
         <div className="flex items-center gap-4 mt-2 text-xs text-subtle tabular flex-wrap">
-          <span>SMS skickade: <span className="text-ink font-medium">{(caseDoc.email_request_count || 0)}</span></span>
+          <span>SMS skickade: <span className="text-ink font-medium">{(caseDoc.last_sms_sent_at ? 1 : 0) + (caseDoc.reminder_count || 0)}</span></span>
           <span>Påminnelser: <span className="text-ink font-medium">{caseDoc.reminder_count || 0} av {MAX_REMINDERS}</span></span>
           {caseDoc.last_inbound_sms_at && (
             <span>Senaste svar: <span className="text-ink font-medium">{formatRelative(caseDoc.last_inbound_sms_at)}</span></span>
