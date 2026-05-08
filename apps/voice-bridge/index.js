@@ -249,7 +249,8 @@ wss.on("connection", async (phoneWs, req) => {
     {
       headers: {
         Authorization: `Bearer ${OPENAI_API_KEY}`,
-        "OpenAI-Beta": "realtime=v1"
+        // Beta header required for gpt-realtime-1.5; GA models (gpt-realtime-2+) reject it
+        ...(realtimeModel === "gpt-realtime-1.5" && { "OpenAI-Beta": "realtime=v1" }),
       }
     }
   );
