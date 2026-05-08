@@ -271,7 +271,7 @@ wss.on("connection", async (phoneWs, req) => {
     // Audio codec: g711_ulaw for Telnyx (8kHz), pcm16 for 46elks (24kHz HD)
     // GA API (gpt-realtime-2+) requires session.type; beta API does not.
     const sessionPayload = {
-      ...(realtimeModel !== "gpt-realtime-1.5" && { type: "conversation" }),
+      ...(realtimeModel !== "gpt-realtime-1.5" && { type: "realtime" }),
       instructions,
       voice,
       input_audio_format: audioFormat,
