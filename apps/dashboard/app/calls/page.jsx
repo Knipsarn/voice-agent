@@ -33,10 +33,11 @@ function formatTime(ts) {
     : typeof ts === "string" ? new Date(ts)
     : new Date(ts);
   const today = new Date(); today.setHours(0,0,0,0);
-  if (d >= today) return `idag ${d.toLocaleTimeString("sv-SE", { hour: "2-digit", minute: "2-digit" })}`;
+  const tz = { timeZone: "Europe/Stockholm" };
+  if (d >= today) return `idag ${d.toLocaleTimeString("sv-SE", { hour: "2-digit", minute: "2-digit", ...tz })}`;
   const yesterday = new Date(today); yesterday.setDate(yesterday.getDate() - 1);
-  if (d >= yesterday) return `igår ${d.toLocaleTimeString("sv-SE", { hour: "2-digit", minute: "2-digit" })}`;
-  return d.toLocaleString("sv-SE", { dateStyle: "short", timeStyle: "short" });
+  if (d >= yesterday) return `igår ${d.toLocaleTimeString("sv-SE", { hour: "2-digit", minute: "2-digit", ...tz })}`;
+  return d.toLocaleString("sv-SE", { dateStyle: "short", timeStyle: "short", ...tz });
 }
 function tsValue(ts) {
   if (!ts) return 0;
@@ -394,7 +395,7 @@ function Voicemails({ voicemails }) {
             <div className="flex-1 min-w-0">
               <div className="flex items-baseline justify-between gap-3 mb-1">
                 <span className="font-semibold text-ink mono text-sm">{vm.caller}</span>
-                <span className="text-xs text-subtle tabular">{vm.timestamp ? new Date(vm.timestamp).toLocaleString("sv-SE", { dateStyle: "short", timeStyle: "short" }) : "—"}</span>
+                <span className="text-xs text-subtle tabular">{vm.timestamp ? new Date(vm.timestamp).toLocaleString("sv-SE", { dateStyle: "short", timeStyle: "short", timeZone: "Europe/Stockholm" }) : "—"}</span>
               </div>
               {vm.duration_seconds && <span className="text-xs text-subtle">{vm.duration_seconds}s · </span>}
               <p className="text-sm text-ink leading-relaxed mt-1">{vm.transcript || "(ingen transkription)"}</p>

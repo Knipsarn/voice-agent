@@ -14,7 +14,7 @@ import { Icon } from "../../components/Icon";
 function formatTime(ts) {
   if (!ts) return "—";
   const d = ts._seconds ? new Date(ts._seconds * 1000) : new Date(ts);
-  return d.toLocaleString("sv-SE", { dateStyle: "short", timeStyle: "medium" });
+  return d.toLocaleString("sv-SE", { dateStyle: "short", timeStyle: "medium", timeZone: "Europe/Stockholm" });
 }
 function formatDuration(ms) {
   if (!ms) return "—";

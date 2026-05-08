@@ -59,7 +59,7 @@ async function run() {
   // ── Header ────────────────────────────────────────────────────────────────
   const meta = callStart?.data || {};
   const dur  = callEnd?.data?.duration_ms ? `${(callEnd.data.duration_ms / 1000).toFixed(1)}s` : "?";
-  const date = callStart ? new Date(callStart.timestamp).toISOString().replace("T", " ").slice(0, 19) + " UTC" : "?";
+  const date = callStart ? new Date(callStart.timestamp).toLocaleString("sv-SE", { timeZone: "Europe/Stockholm", year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", second: "2-digit" }).replace(",", "") + " CET" : "?";
 
   console.log("");
   console.log(`  Call replay — ${tenantId}`);
