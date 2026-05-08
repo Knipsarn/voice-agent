@@ -7,8 +7,7 @@ import { getTenant, listNumbersForTenant, getSettings } from "@/lib/control-plan
 import { AppShell } from "../components/AppShell";
 import { Icon } from "../components/Icon";
 import { GreetingEditor } from "../components/GreetingEditor";
-import { VoicePicker } from "../components/VoicePicker";
-import { ModelPicker } from "../components/ModelPicker";
+import { VoiceModelPicker } from "../components/VoiceModelPicker";
 
 function pickTenantId(scope, searchParams) {
   if (scope.admin) return searchParams?.tenant || null;
@@ -88,11 +87,19 @@ export default async function AgentPage({ searchParams }) {
           isOverride={!!settings?.first_message}
         />
 
-        {/* Voice & language */}
-        <Card title="Röst & språk">
-          <VoicePicker tenantId={tenantId} initialVoice={tenant.voice} currentModel={tenant.realtime_model} />
+        {/* Voice & model */}
+        <Card title="Röst & modell">
+          <VoiceModelPicker
+            tenantId={tenantId}
+            initialModel={tenant.realtime_model || "gpt-realtime-1.5"}
+            initialVoice={tenant.voice}
+            isAdmin={scope.admin}
+          />
+        </Card>
+
+        {/* Language & tech */}
+        <Card title="Språk & konfiguration">
           <Row label="Språk" value={tenant.default_language} mono />
-          {scope.admin && <ModelPicker tenantId={tenantId} initialModel={tenant.realtime_model} />}
           {scope.admin && <Row label="Entry mode" value={tenant.entry_mode} mono />}
           {scope.admin && <Row label="Status" value={tenant.status} mono />}
         </Card>
