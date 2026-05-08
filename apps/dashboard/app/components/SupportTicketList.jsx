@@ -10,10 +10,10 @@ const CATEGORY_LABELS = {
 };
 
 const STATUS = {
-  new:      { label: "Behandlas av AI",           dot: "bg-warning",  pill: "bg-warning/10 text-warning" },
-  reviewed: { label: "Väntar på mänsklig granskning", dot: "bg-accent",  pill: "bg-accent/10 text-accent"  },
-  applied:  { label: "Löst",                      dot: "bg-success",  pill: "bg-success/10 text-success"  },
-  rejected: { label: "Avvisat",                   dot: "bg-subtle",   pill: "bg-line-soft text-muted"     },
+  new:      { label: "Behandlas av AI",                dot: "bg-warning", pill: "bg-warning text-white"        },
+  reviewed: { label: "Väntar på mänsklig granskning",  dot: "bg-accent",  pill: "bg-accent text-white"         },
+  applied:  { label: "Löst",                           dot: "bg-success", pill: "bg-success text-white"        },
+  rejected: { label: "Avvisat",                        dot: "bg-subtle",  pill: "bg-line-soft text-muted"      },
 };
 
 const RISK_CLS = { low: "text-success", medium: "text-warning", high: "text-danger" };

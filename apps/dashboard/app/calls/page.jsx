@@ -21,10 +21,10 @@ const PERIODS = [
 
 // Status taxonomy used in the unified list. Each row gets exactly one of these.
 const STATUSES = {
-  pending: { label: "Pågående", dotCls: "bg-warning",        pillCls: "bg-warning/10 text-warning" },
-  won:     { label: "Vunna",    dotCls: "bg-success",        pillCls: "bg-success/10 text-success" },
-  missed:  { label: "Missade",  dotCls: "bg-danger",         pillCls: "bg-danger/10 text-danger"   },
-  other:   { label: "Annat",    dotCls: "bg-subtle",         pillCls: "bg-line-soft text-muted"    },
+  pending: { label: "Pågående", dotCls: "bg-warning", pillCls: "bg-warning text-white"  },
+  won:     { label: "Vunna",    dotCls: "bg-success", pillCls: "bg-success text-white"  },
+  missed:  { label: "Missade",  dotCls: "bg-danger",  pillCls: "bg-danger text-white"   },
+  other:   { label: "Annat",    dotCls: "bg-subtle",  pillCls: "bg-line-soft text-muted"},
 };
 
 function formatTime(ts) {
