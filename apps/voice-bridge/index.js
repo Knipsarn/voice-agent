@@ -424,6 +424,11 @@ wss.on("connection", async (phoneWs, req) => {
 
         case "conversation.item.input_audio_transcription.completed":
           if (msg.transcript) {
+            // GA API doesn't fire conversation.item.created for user audio — count here instead
+            if (isGAModel) {
+              turnCountUser++;
+              log("user_turn", { trace_id, tenant_id: tenantId || null, turn_user: turnCountUser });
+            }
             log("user_transcript", { trace_id, tenant_id: tenantId || null, turn_user: turnCountUser, text: msg.transcript });
             transcripts.push({ role: "user", message: msg.transcript, time_in_call_secs: Math.round((Date.now() - callStart) / 1000) });
           }
