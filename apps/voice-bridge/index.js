@@ -245,16 +245,19 @@ wss.on("connection", async (phoneWs, req) => {
   });
 
   // --- OpenAI Realtime session ---
-  const openaiWs = new WebSocket(
-    `wss://api.openai.com/v1/realtime?model=${realtimeModel}`,
-    {
-      headers: {
-        Authorization: `Bearer ${OPENAI_API_KEY}`,
-        // Beta header required for gpt-realtime-1.5; GA models (gpt-realtime-2+) reject it
-        ...(realtimeModel === "gpt-realtime-1.5" && { "OpenAI-Beta": "realtime=v1" }),
-      }
+  const isGAModel = realtimeModel !== "gpt-realtime-1.5";
+  // GA API: voice in URL. Beta API: voice in session.update payload.
+  const openaiUrl = isGAModel
+    ? `wss://api.openai.com/v1/realtime?model=${realtimeModel}&voice=${voice}`
+    : `wss://api.openai.com/v1/realtime?model=${realtimeModel}`;
+
+  const openaiWs = new WebSocket(openaiUrl, {
+    headers: {
+      Authorization: `Bearer ${OPENAI_API_KEY}`,
+      // Beta header required for gpt-realtime-1.5; GA models reject it
+      ...(isGAModel ? {} : { "OpenAI-Beta": "realtime=v1" }),
     }
-  );
+  });
 
   let openaiReady = false;
 
@@ -268,12 +271,11 @@ wss.on("connection", async (phoneWs, req) => {
       latency_ms: openaiReadyTime - callStart,
     });
 
-    // Audio codec: g711_ulaw for Telnyx (8kHz), pcm16 for 46elks (24kHz HD)
-    // GA API (gpt-realtime-2+) requires session.type; beta API does not.
+    // GA API (gpt-realtime-2+): type required, voice set in URL not session.
+    // Beta API (gpt-realtime-1.5): no type field, voice in session.
     const sessionPayload = {
-      ...(realtimeModel !== "gpt-realtime-1.5" && { type: "realtime" }),
+      ...(isGAModel ? { type: "realtime" } : { voice }),
       instructions,
-      voice,
       input_audio_format: audioFormat,
       output_audio_format: audioFormat
     };
