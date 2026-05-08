@@ -67,11 +67,11 @@ export async function POST(req) {
     return Response.json({ error: "not your tenant" }, { status: 403 });
   }
 
-  const { text } = body || {};
+  const { text, category } = body || {};
   if (!text || !text.trim()) return Response.json({ error: "text required" }, { status: 400 });
 
   try {
-    const result = await submitPromptSuggestion(tenantId, text, session.user.email);
+    const result = await submitPromptSuggestion(tenantId, text, session.user.email, category);
     return Response.json(result, { status: 201 });
   } catch (err) {
     return Response.json({ error: err.message }, { status: err.status || 500 });

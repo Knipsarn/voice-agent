@@ -8,6 +8,7 @@
     "dev": "node --watch index.js"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.52.0",
     "@google-cloud/firestore": "^7.0.0",
     "dotenv": "^16.4.0",
     "express": "^4.21.0",

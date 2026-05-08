@@ -49,6 +49,7 @@ export async function POST(req) {
       text: body.text,
       submitted_by: session.user.email,
       call_context: body.call_context,
+      category: body.category,
     });
     return Response.json(result, { status: 201 });
   } catch (err) {

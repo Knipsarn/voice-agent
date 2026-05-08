@@ -119,9 +119,9 @@ export async function listSuggestions(tenantId, { limit = 50 } = {}) {
   return cpGet(`/suggestions/${encodeURIComponent(tenantId)}?limit=${limit}`);
 }
 
-export async function createSuggestion(tenantId, { text, submitted_by, call_context }) {
+export async function createSuggestion(tenantId, { text, submitted_by, call_context, category }) {
   return cpJson("POST", `/suggestions/${encodeURIComponent(tenantId)}`, {
-    text, submitted_by, call_context,
+    text, submitted_by, call_context, category,
   });
 }
 

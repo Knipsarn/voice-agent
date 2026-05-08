@@ -31,9 +31,11 @@ const express = require("express");
 const router = express.Router();
 
 const { Firestore, FieldValue } = require("@google-cloud/firestore");
+const { processTicket } = require("../lib/ticket-agent");
 
 const COLLECTION = "prompt_suggestions";
 const ALLOWED_STATUSES = ["new", "reviewed", "applied", "rejected"];
+const ALLOWED_CATEGORIES = ["prompt", "call", "dashboard", "ai_info", "other"];
 
 let db = null;
 function getDb() {
@@ -67,7 +69,7 @@ router.get("/:tenantId", async (req, res) => {
 
 router.post("/:tenantId", async (req, res) => {
   try {
-    const { text, submitted_by, call_context } = req.body || {};
+    const { text, submitted_by, call_context, category } = req.body || {};
     if (!text || typeof text !== "string" || text.trim().length === 0) {
       return res.status(400).json({ error: "text required" });
     }
@@ -75,9 +77,12 @@ router.post("/:tenantId", async (req, res) => {
       return res.status(400).json({ error: "text too long (max 4000 chars)" });
     }
 
+    const resolvedCategory = ALLOWED_CATEGORIES.includes(category) ? category : "other";
+
     const doc = {
       tenant_id: req.params.tenantId,
       text: text.trim(),
+      category: resolvedCategory,
       submitted_by: submitted_by || null,
       submitted_at: FieldValue.serverTimestamp(),
       status: "new",
@@ -89,6 +94,39 @@ router.post("/:tenantId", async (req, res) => {
     const ref = await getDb().collection(COLLECTION).add(doc);
     const after = await ref.get();
     res.status(201).json({ id: ref.id, ...after.data() });
+
+    // Fire-and-forget: let the agent process the ticket asynchronously
+    setImmediate(async () => {
+      try {
+        const result = await processTicket({
+          tenant_id: req.params.tenantId,
+          ticket_id: ref.id,
+          text: text.trim(),
+          category: resolvedCategory,
+        });
+
+        await ref.set({
+          status: result.needs_human ? "reviewed" : "applied",
+          risk_level: result.risk_level,
+          admin_response: result.agent_response,
+          agent_analysis: result.analysis,
+          agent_actions: result.actions_taken || [],
+          agent_handled_at: FieldValue.serverTimestamp(),
+        }, { merge: true });
+
+        console.log(JSON.stringify({
+          event: "ticket_agent_done",
+          ticket_id: ref.id,
+          tenant_id: req.params.tenantId,
+          risk_level: result.risk_level,
+          needs_human: result.needs_human,
+          actions: result.actions_taken?.length || 0,
+        }));
+      } catch (err) {
+        console.error(JSON.stringify({ event: "ticket_agent_error", ticket_id: ref.id, error: err.message }));
+      }
+    });
+
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
