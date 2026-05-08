@@ -272,8 +272,8 @@ wss.on("connection", async (phoneWs, req) => {
 
     // Map internal audio format string to API format objects
     const gaAudioFormat = audioFormat === "g711_ulaw"
-      ? { type: "audio/pcmu", rate: 8000 }
-      : { type: "audio/pcm", rate: 24000 };
+      ? { type: "audio/pcmu" }
+      : { type: "audio/pcm" };
 
     // Build tools
     let tools;
