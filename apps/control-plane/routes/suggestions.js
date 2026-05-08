@@ -96,6 +96,7 @@ router.post("/:tenantId", async (req, res) => {
     res.status(201).json({ id: ref.id, ...after.data() });
 
     // Fire-and-forget: let the agent process the ticket asynchronously
+    const hasCallContext = !!(doc.call_context?.call_control_id);
     setImmediate(async () => {
       try {
         const result = await processTicket({
@@ -103,6 +104,7 @@ router.post("/:tenantId", async (req, res) => {
           ticket_id: ref.id,
           text: text.trim(),
           category: resolvedCategory,
+          has_call_context: hasCallContext,
         });
 
         await ref.set({

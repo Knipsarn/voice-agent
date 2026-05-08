@@ -80,27 +80,39 @@ async function patchReasoning({ tenant_id, reasoning_effort }) {
   return JSON.stringify({ ok: true, reasoning_effort });
 }
 
+// Sections the agent is NEVER allowed to auto-apply.
+// base = core personality/intake flow. modes = workflow routing.
+// Humans must review these — one bad suggestion chain can break the agent.
+const LOCKED_SECTIONS = new Set(["base"]);
+function isModeSection(section) { return section.startsWith("mode."); }
+
 async function patchPrompt({ tenant_id, section, content, reason }) {
   if (!section || !content) throw new Error("section and content required");
+
+  // Safety lock: refuse to write to protected sections
+  if (LOCKED_SECTIONS.has(section) || isModeSection(section)) {
+    throw new Error(
+      `Section '${section}' is safety-locked. Only first_message and knowledge.* can be auto-applied. ` +
+      `For base/mode changes, set risk_level=high and needs_human=true in your result.`
+    );
+  }
+
   const ref = db.collection(TENANTS).doc(tenant_id);
   const doc = await ref.get();
   if (!doc.exists) throw new Error(`Tenant not found: ${tenant_id}`);
   const data = doc.data();
 
   const update = {};
-  if (section === "base") {
-    update["instructions.base"] = content;
-  } else if (section === "first_message") {
+  if (section === "first_message") {
     update["first_message"] = content;
-  } else if (section.startsWith("mode.")) {
-    const modeName = section.replace(/^mode\./, "");
-    if (!data.modes?.[modeName]) throw new Error(`Mode not found: ${modeName}. Available: ${Object.keys(data.modes || {}).join(", ")}`);
-    update[`modes.${modeName}.instructions`] = content;
   } else if (section.startsWith("knowledge.")) {
     const blockName = section.replace(/^knowledge\./, "");
     update[`knowledge_blocks.${blockName}`] = content;
   } else {
-    throw new Error(`Unknown section '${section}'. Use: base, first_message, mode.<name>, knowledge.<name>`);
+    throw new Error(
+      `Unknown section '${section}'. Auto-appliable: first_message, knowledge.<name>. ` +
+      `Locked (needs human): base, mode.<name>.`
+    );
   }
 
   await ref.update(update);
@@ -203,10 +215,21 @@ const SYSTEM_PROMPT = `You are an autonomous AI agent for the Finnai AI voice pl
 ## Ticket categories and your authority
 
 **prompt** — Changes to what the AI says, its personality, its knowledge, its intake flow
-- Low risk: fixing factual errors (wrong practice areas), adding missing info, fixing wording bugs
-- Medium risk: changing the intake flow structure, adding/removing modes
-- High risk: completely rewriting the base prompt
-→ You CAN apply low/medium risk prompt changes using patch_prompt
+
+SAFETY ZONES (you MUST respect these — the tool will reject violations):
+- 🔒 LOCKED (never auto-apply, always needs_human=true): base instructions, workflow modes (mode.*)
+  These define core personality and intake flow. One bad change can break all calls.
+- ✅ OPEN (safe to auto-apply): first_message, knowledge.* blocks
+  Low blast radius — greetings and factual info.
+
+If a ticket requests changes to a locked section: set risk_level=high, needs_human=true,
+and write agent_response explaining what a human developer should do.
+
+If a ticket was submitted with a call_context (from a specific call): ALWAYS needs_human=true.
+One call is not enough evidence to change agent behavior — this needs human judgment.
+
+→ You CAN auto-apply: first_message and knowledge.* changes (if no call_context)
+→ You MUST escalate: base, modes, anything with call_context
 
 **call** — Changes to voice, model, reasoning speed/quality
 - Low risk: changing voice, changing reasoning_effort
@@ -244,7 +267,7 @@ After taking any actions, your FINAL message must be a valid JSON object (and no
 
 // ── Main export ───────────────────────────────────────────────────────────────
 
-async function processTicket({ tenant_id, ticket_id, text, category }) {
+async function processTicket({ tenant_id, ticket_id, text, category, has_call_context }) {
   if (!process.env.ANTHROPIC_API_KEY) {
     return {
       risk_level: "high",
@@ -263,6 +286,7 @@ async function processTicket({ tenant_id, ticket_id, text, category }) {
       content: `Process this support ticket for tenant "${tenant_id}".
 
 Category: ${category}
+Submitted from a specific call: ${has_call_context ? "YES — treat as needs_human=true regardless of risk level" : "no"}
 Ticket text: ${text}
 
 Start by reading the tenant config, then analyze the ticket and take appropriate action. End your response with the JSON result object.`,

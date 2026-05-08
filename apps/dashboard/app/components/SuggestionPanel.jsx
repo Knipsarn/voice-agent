@@ -2,7 +2,7 @@
 import { useState, useEffect, useRef } from "react";
 import { Icon } from "./Icon";
 
-export function SuggestionPanel({ open, onClose, tenantId, callContext }) {
+export function SuggestionPanel({ open, onClose, tenantId, callContext, category }) {
   const [suggestions, setSuggestions] = useState([]);
   const [loading, setLoading] = useState(false);
   const [text, setText] = useState("");
@@ -41,6 +41,7 @@ export function SuggestionPanel({ open, onClose, tenantId, callContext }) {
           tenant_id: tenantId,
           text: text.trim(),
           call_context: callContext || null,
+          category: category || (callContext ? "prompt" : "other"),
         }),
       });
       const data = await res.json();
@@ -67,10 +68,14 @@ export function SuggestionPanel({ open, onClose, tenantId, callContext }) {
         {/* Header */}
         <div className="px-5 py-4 border-b border-line flex items-start justify-between">
           <div>
-            <h2 className="text-base font-semibold text-ink tracking-tight">Förbättra agenten</h2>
-            <p className="text-xs text-muted mt-0.5">
-              Berätta vad agenten bör göra annorlunda. Vi går igenom varje förslag.
-            </p>
+            <h2 className="text-base font-semibold text-ink tracking-tight">
+            {callContext ? "Förbättra agentens svar" : "Förbättringsförslag"}
+          </h2>
+          <p className="text-xs text-muted mt-0.5">
+            {callContext
+              ? "Berätta vad agenten borde ha sagt eller gjort annorlunda i detta samtal. En mänsklig utvecklare granskar förslaget."
+              : "Berätta vad du vill ändra. Vår AI-agent hanterar förslaget direkt."}
+          </p>
           </div>
           <button onClick={onClose} className="text-muted hover:text-ink p-1 -m-1">
             <Icon name="x" size={18} />
