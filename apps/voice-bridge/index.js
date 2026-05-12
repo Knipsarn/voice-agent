@@ -731,6 +731,23 @@ wss.on("connection", async (phoneWs, req) => {
       logError("call_session_bridge_unhandled", { trace_id, error: err.message });
     }
 
+    // --- Fire post-processor immediately (replaces every-minute polling) ---
+    // Fire-and-forget: don't await. If this fails, the hourly safety-net scheduler picks it up.
+    if (callControlId && process.env.POST_PROCESSOR_URL) {
+      const ppUrl = `${process.env.POST_PROCESSOR_URL.replace(/\/$/, "")}/process`;
+      const ppHeaders = { "Content-Type": "application/json" };
+      if (process.env.POST_PROCESSOR_SECRET) {
+        ppHeaders.Authorization = `Bearer ${process.env.POST_PROCESSOR_SECRET}`;
+      }
+      fetch(ppUrl, {
+        method: "POST",
+        headers: ppHeaders,
+        body: JSON.stringify({ call_control_id: callControlId }),
+      })
+        .then((r) => log("post_processor_triggered", { trace_id, status: r.status }))
+        .catch((err) => logError("post_processor_trigger_failed", { trace_id, error: err.message }));
+    }
+
     // --- Post-call webhook ---
     const webhookUrl = tenantConfig?.webhook?.post_call_url;
     if (webhookUrl && tenantConfig?.webhook?.enabled !== false) {
