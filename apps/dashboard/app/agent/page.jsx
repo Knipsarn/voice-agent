@@ -8,6 +8,7 @@ import { AppShell } from "../components/AppShell";
 import { Icon } from "../components/Icon";
 import { GreetingEditor } from "../components/GreetingEditor";
 import { VoiceModelPicker } from "../components/VoiceModelPicker";
+import { OutboundDialer } from "../components/OutboundDialer";
 
 function pickTenantId(scope, searchParams) {
   if (scope.admin) return searchParams?.tenant || null;
@@ -70,6 +71,11 @@ export default async function AgentPage({ searchParams }) {
             {scope.admin ? "Editable runtime config + Git-published technical setup." : "Här kan du ändra hur din AI-assistent presenterar sig."}
           </p>
         </header>
+
+        {/* Outbound dialer — for outbound-direction tenants */}
+        {tenant.direction === "outbound" && (
+          <OutboundDialer tenantId={tenantId} />
+        )}
 
         {/* Test your assistant callout */}
         {numbers.length > 0 && (

@@ -54,6 +54,10 @@ export async function patchReasoning(tenantId, reasoning_effort) {
   return cpJson("PATCH", `/tenants/${encodeURIComponent(tenantId)}/reasoning`, { reasoning_effort });
 }
 
+export async function outboundDial(tenantId, to) {
+  return cpJson("POST", `/outbound/dial`, { tenant_id: tenantId, to });
+}
+
 export async function listNumbersForTenant(tenantId) {
   return cpGet(`/numbers?tenant=${encodeURIComponent(tenantId)}`);
 }

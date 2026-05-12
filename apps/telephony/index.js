@@ -21,6 +21,7 @@ const { log, logError } = require("./lib/log");
 
 const healthRouter = require("./routes/health");
 const webhookRouter = require("./routes/webhooks");
+const outboundRouter = require("./routes/outbound");
 
 const app = express();
 app.disable("x-powered-by");
@@ -34,6 +35,7 @@ app.use(express.json({
 
 app.use("/health", healthRouter);
 app.use("/webhooks/telnyx", webhookRouter);
+app.use("/v1/calls/outbound", outboundRouter);
 
 app.use((req, res) => {
   res.status(404).json({ error: `Not found: ${req.method} ${req.path}` });

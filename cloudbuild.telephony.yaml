@@ -22,7 +22,8 @@ steps:
       - --image=gcr.io/ldk-clean/telephony-service:latest
       - --region=europe-west1
       - --project=ldk-clean
-      - --update-secrets=TELNYX_API_KEY=TELNYX_API_KEY:latest,TELNYX_PUBLIC_KEY=TELNYX_PUBLIC_KEY:latest
+      - --update-secrets=TELNYX_API_KEY=TELNYX_API_KEY:latest,TELNYX_PUBLIC_KEY=TELNYX_PUBLIC_KEY:latest,CONTROL_PLANE_API_KEY=CONTROL_PLANE_API_KEY:latest
+      - --set-env-vars=BRIDGE_BASE_URL=https://voice-bridge-service-360579353014.europe-west1.run.app/,TELNYX_OUTBOUND_CONNECTION_ID=2946878804032751101
       - --allow-unauthenticated
       - --no-cpu-throttling
       - --min-instances=0

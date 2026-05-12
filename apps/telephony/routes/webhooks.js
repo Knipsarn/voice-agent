@@ -27,9 +27,18 @@ async function handleCallInitiated(payload, traceId) {
   const callControlId = payload.call_control_id;
   const to = payload.to;
   const from = payload.from;
+  const direction = payload.direction;
 
   if (!callControlId || !to) {
     logError("call_initiated_missing_fields", { trace_id: traceId, has_ccid: Boolean(callControlId), has_to: Boolean(to) });
+    return;
+  }
+
+  // Outbound calls are initiated by our /v1/calls/outbound endpoint, which
+  // already set stream_url on the dial command. Telnyx will auto-stream when
+  // the recipient answers. We just log it — no answer or routing needed.
+  if (direction === "outgoing") {
+    log("outbound_call_initiated", { trace_id: traceId, call_control_id: callControlId, to, from });
     return;
   }
 
