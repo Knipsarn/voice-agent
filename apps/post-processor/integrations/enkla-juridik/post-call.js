@@ -103,10 +103,20 @@ function appendSummary(existingSummary, newSummary) {
   return existingSummary ? `${existingSummary}\n\n${block}` : block;
 }
 
+// E.164 validation — must be + followed by 8-15 digits, nothing else
+function isValidE164(phone) {
+  return typeof phone === "string" && /^\+\d{8,15}$/.test(phone);
+}
+
 module.exports = async function enklaJuridikPostCall({ call, summary }) {
   const phone = call.from_number || call.caller_number || call.phone;
   if (!phone) {
     log("integration_skip_no_phone", { tenant_id: TENANT_ID, call_control_id: call.call_control_id });
+    return;
+  }
+  if (!isValidE164(phone)) {
+    // Caller had hidden/anonymous caller ID — can't SMS, just log and bail
+    log("integration_skip_invalid_phone", { tenant_id: TENANT_ID, call_control_id: call.call_control_id, phone });
     return;
   }
 
@@ -202,15 +212,27 @@ module.exports = async function enklaJuridikPostCall({ call, summary }) {
     return;
   }
 
-  // status === WAITING_SMS — send SMS unless we sent one in the last hour
-  // (avoid spamming on rapid back-to-back calls)
-  const lastReminder = caseAfter.last_reminder?.toDate?.();
-  const lastSmsSent = caseAfter.last_sms_sent_at?.toDate?.();
-  const lastContact = lastSmsSent && lastReminder
-    ? new Date(Math.max(lastSmsSent.getTime(), lastReminder.getTime()))
-    : (lastSmsSent || lastReminder);
-  const recentlyContacted = lastContact && ((Date.now() - lastContact.getTime()) < 60 * 60 * 1000);
-  if (recentlyContacted) {
+  // status === WAITING_SMS — atomically claim the SMS slot.
+  // Race fix: read last_sms_sent_at AND write it in the same transaction,
+  // so two parallel post-processor runs can't both see "null" and both send.
+  const SMS_GUARD_MS = 60 * 60 * 1000; // 1 hour
+  const claimedSms = await getDb().runTransaction(async (tx) => {
+    const ref = getDb().collection(CASES).doc(caseId);
+    const snap = await tx.get(ref);
+    const d = snap.data() || {};
+    const lastReminder = d.last_reminder?.toDate?.();
+    const lastSmsSent  = d.last_sms_sent_at?.toDate?.();
+    const lastContact  = lastSmsSent && lastReminder
+      ? new Date(Math.max(lastSmsSent.getTime(), lastReminder.getTime()))
+      : (lastSmsSent || lastReminder);
+    if (lastContact && (Date.now() - lastContact.getTime()) < SMS_GUARD_MS) {
+      return false; // another run already sent
+    }
+    tx.set(ref, { last_sms_sent_at: FieldValue.serverTimestamp() }, { merge: true });
+    return true;
+  });
+
+  if (!claimedSms) {
     log("integration_sms_skip_recent", { tenant_id: TENANT_ID, case_id: caseId });
     return;
   }
