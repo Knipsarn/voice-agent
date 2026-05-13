@@ -11,7 +11,7 @@
   "direction": "outbound",
   "first_message_enabled": true,
   "first_message": "Hej {{lead_name}}! Mitt namn är Ulrika, jag är en AI-agent och ringer på uppdrag av Telness. Har du en minut?",
-  "first_message_delay_ms": 500,
+  "first_message_delay_ms": 1500,
   "instructions": {
     "base": "$file:configs/prompt-assets/telness-outbound/main-prompt.md",
     "default_mode": "SALES"
@@ -30,7 +30,8 @@
     "ai_option_digit": null,
     "voicemail_option_digit": null
   },
-  "vad_threshold": 0.3,
+  "vad_threshold": 0.45,
+  "silence_duration_ms": 700,
   "features": {
     "direct_to_gpt": true,
     "barge_in": true,

@@ -242,7 +242,9 @@ wss.on("connection", async (phoneWs, req) => {
   }
   const firstMessageDelayMs = tenantConfig?.first_message_delay_ms || 0;
   const transcriptionLanguage = tenantConfig?.transcription_language || null;
-  const vadThreshold = tenantConfig?.vad_threshold ?? 0.5; // default 0.5; raise for noisy PSTN lines
+  const vadThreshold       = tenantConfig?.vad_threshold       ?? 0.5;
+  const silenceDurationMs  = tenantConfig?.silence_duration_ms  ?? 500;
+  const prefixPaddingMs    = tenantConfig?.prefix_padding_ms    ?? 300;
   let audioForwardingReady = (firstMessageDelayMs === 0); // hold off during welcome audio
 
   log("call_start", {
@@ -323,8 +325,8 @@ wss.on("connection", async (phoneWs, req) => {
             turn_detection: {
               type: "server_vad",
               threshold: vadThreshold,
-              prefix_padding_ms: 300,
-              silence_duration_ms: 500,
+              prefix_padding_ms: prefixPaddingMs,
+              silence_duration_ms: silenceDurationMs,
             },
           },
           output: {
@@ -424,20 +426,7 @@ wss.on("connection", async (phoneWs, req) => {
 
       switch (msg.type) {
         case "input_audio_buffer.speech_started":
-          log("speech_started", { trace_id, tenant_id: tenantId || null, turn_user: turnCountUser + 1 });
-          // Barge-in: if the assistant is mid-response, cancel it and truncate the item
-          // so OpenAI knows how much audio was actually heard before the interruption.
-          if (currentAssistantItemId) {
-            openaiWs.send(JSON.stringify({ type: "response.cancel" }));
-            openaiWs.send(JSON.stringify({
-              type: "conversation.item.truncate",
-              item_id: currentAssistantItemId,
-              content_index: 0,
-              audio_end_ms: assistantAudioMs,
-            }));
-            currentAssistantItemId = null;
-            assistantAudioMs = 0;
-          }
+          log("speech_started", { trace_id, tenant_id: tenantId || null, turn_user: turnCountUser + 1, assistant_audio_ms: assistantAudioMs });
           break;
 
         case "input_audio_buffer.speech_stopped":
