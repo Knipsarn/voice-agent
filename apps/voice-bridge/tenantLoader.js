@@ -254,4 +254,82 @@ async function fetchPriorCaseContext(callerNumber, tenantId) {
   }
 }
 
-module.exports = { loadTenant, buildInstructions, buildWorkflowInstructions, generateWorkflowTools, isWorkflowEnabled, fetchPriorCaseContext };
+/**
+ * Scrape a lead's website homepage and extract a short business description.
+ * Used to personalise outbound call instructions before the call starts.
+ * Never throws — a failed scrape must never abort a call.
+ *
+ * @param {string} websiteUrl
+ * @returns {Promise<string|null>}  A 1–2 sentence summary, or null on failure.
+ */
+async function scrapeLeadWebsite(websiteUrl) {
+  if (!websiteUrl) return null;
+  const https = require("https");
+  const http  = require("http");
+  return new Promise((resolve) => {
+    const attempt = (targetUrl, redirectsLeft = 2) => {
+      try {
+        const u = new URL(targetUrl);
+        const mod = u.protocol === "https:" ? https : http;
+        let settled = false;
+        const done = (val) => { if (!settled) { settled = true; resolve(val); } };
+        const timer = setTimeout(() => done(null), 5000);
+        const req = mod.get(targetUrl, { headers: { "User-Agent": "Mozilla/5.0 (compatible; TelnessBot/1.0)" } }, (res) => {
+          if (res.statusCode >= 300 && res.statusCode < 400 && res.headers.location && redirectsLeft > 0) {
+            clearTimeout(timer);
+            attempt(new URL(res.headers.location, targetUrl).href, redirectsLeft - 1);
+            return;
+          }
+          let html = "";
+          res.setEncoding("utf8");
+          res.on("data", (chunk) => {
+            html += chunk;
+            if (html.length > 60000) res.destroy();
+          });
+          res.on("end", () => { clearTimeout(timer); done(extractPageSummary(html)); });
+          res.on("error", () => { clearTimeout(timer); done(null); });
+        });
+        req.on("error", () => { clearTimeout(timer); done(null); });
+      } catch {
+        resolve(null);
+      }
+    };
+    attempt(websiteUrl);
+  });
+}
+
+function extractPageSummary(html) {
+  const strip = (s) => s.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
+  const metaMatch = html.match(/<meta[^>]+name=["']description["'][^>]+content=["']([^"']{10,})/i)
+                 || html.match(/<meta[^>]+content=["']([^"']{10,})["'][^>]+name=["']description["']/i);
+  const metaDesc = metaMatch ? strip(metaMatch[1]) : "";
+  const h1Match  = html.match(/<h1[^>]*>([\s\S]{5,200}?)<\/h1>/i);
+  const h1       = h1Match ? strip(h1Match[1]) : "";
+  const titleMatch = html.match(/<title[^>]*>([^<]+)<\/title>/i);
+  const title    = titleMatch ? strip(titleMatch[1]) : "";
+  const best = metaDesc || h1 || title;
+  return best ? best.slice(0, 250) : null;
+}
+
+/**
+ * Build the lead context block prepended to outbound call instructions.
+ *
+ * @param {string|null} leadName
+ * @param {string|null} leadBusiness
+ * @param {string|null} websiteSummary
+ * @returns {string}
+ */
+function buildLeadContext(leadName, leadBusiness, websiteSummary) {
+  const lines = ["## Lead-information för detta samtal"];
+  if (leadName)     lines.push(`- Kontaktperson: ${leadName}`);
+  if (leadBusiness) lines.push(`- Företag: ${leadBusiness}`);
+  if (websiteSummary) lines.push(`- Vad de gör (från hemsidan): ${websiteSummary}`);
+  lines.push("");
+  lines.push("Använd denna information för att personalisera samtalet:");
+  lines.push("- Tilltala kontaktpersonen med förnamn i öppningen och under samtalet.");
+  lines.push("- Nämn företagsnamnet naturligt när det passar.");
+  lines.push("- Koppla produkten till vad de faktiskt gör — referera till deras verksamhet konkret.");
+  return lines.join("\n");
+}
+
+module.exports = { loadTenant, buildInstructions, buildWorkflowInstructions, generateWorkflowTools, isWorkflowEnabled, fetchPriorCaseContext, scrapeLeadWebsite, buildLeadContext };

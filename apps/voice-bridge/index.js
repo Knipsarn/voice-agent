@@ -9,7 +9,7 @@ const { WebSocketServer, WebSocket } = require("ws");
 const url = require("url");
 const crypto = require("crypto");
 
-const { loadTenant, buildInstructions, buildWorkflowInstructions, generateWorkflowTools, isWorkflowEnabled, fetchPriorCaseContext } = require("./tenantLoader");
+const { loadTenant, buildInstructions, buildWorkflowInstructions, generateWorkflowTools, isWorkflowEnabled, fetchPriorCaseContext, scrapeLeadWebsite, buildLeadContext } = require("./tenantLoader");
 const { writeBridgeData: writeCallSessionBridgeData } = require("./lib/callSessions");
 
 // ─── Structured logging ───────────────────────────────────────────────────────
@@ -162,6 +162,9 @@ wss.on("connection", async (phoneWs, req) => {
     : (query.caller ? query.caller.trim().replace(/^(\d)/, "+$1") : null);
   const sessionId = query["session-id"] || null;
   const callControlId = query["call_control_id"] || query["control-id"] || null;
+  const leadName     = query.lead_name     ? decodeURIComponent(query.lead_name).trim()     : null;
+  const leadBusiness = query.lead_business ? decodeURIComponent(query.lead_business).trim() : null;
+  const leadWebsite  = query.lead_website  ? decodeURIComponent(query.lead_website).trim()  : null;
 
   const tenantConfig = tenantId ? await loadTenant(tenantId) : null;
   const fallback = !tenantConfig;
@@ -213,13 +216,23 @@ wss.on("connection", async (phoneWs, req) => {
     if (priorContext) instructions += priorContext;
   }
 
+  // For outbound calls: scrape lead website and prepend lead context block to instructions.
+  // lead_name, lead_business, lead_website come in as query params on the WSS URL.
+  if (!fallback && tenantConfig.direction === "outbound" && (leadName || leadBusiness)) {
+    const websiteSummary = leadWebsite ? await scrapeLeadWebsite(leadWebsite) : null;
+    const leadBlock = buildLeadContext(leadName, leadBusiness, websiteSummary);
+    instructions = leadBlock + "\n\n" + instructions;
+  }
+
   const voice = tenantConfig?.voice || DEFAULT_VOICE;
   const realtimeModel = tenantConfig?.realtime_model || DEFAULT_REALTIME_MODEL;
   const reasoningEffort = tenantConfig?.reasoning_effort || null;
   const entryMode = tenantConfig?.entry_mode || "unknown";
-  const firstMessage = !fallback && tenantConfig.first_message_enabled
+  let firstMessage = !fallback && tenantConfig.first_message_enabled
     ? (tenantConfig.first_message || null)
     : null;
+  if (firstMessage && leadName)     firstMessage = firstMessage.replace(/\{\{lead_name\}\}/g,     leadName.split(" ")[0]);
+  if (firstMessage && leadBusiness) firstMessage = firstMessage.replace(/\{\{lead_business\}\}/g, leadBusiness);
   const firstMessageDelayMs = tenantConfig?.first_message_delay_ms || 0;
   const transcriptionLanguage = tenantConfig?.transcription_language || null;
   const vadThreshold = tenantConfig?.vad_threshold ?? 0.5; // default 0.5; raise for noisy PSTN lines

@@ -10,7 +10,7 @@
   "entry_mode": "direct_to_gpt",
   "direction": "outbound",
   "first_message_enabled": true,
-  "first_message": "Hej, mitt namn är Ulrika. Jag är en AI-telefonist och ringer för att berätta om hur jag kan hjälpa er i er verksamhet. Vill du veta mer?",
+  "first_message": "Hej {{lead_name}}! Mitt namn är Ulrika, jag är en AI-agent och ringer på uppdrag av Telness. Har du en minut?",
   "first_message_delay_ms": 500,
   "instructions": {
     "base": "$file:configs/prompt-assets/telness-outbound/main-prompt.md",
@@ -34,6 +34,12 @@
     "direct_to_gpt": true,
     "barge_in": true,
     "mode_switching": false
+  },
+  "tools": {
+    "transfer_to_colleague": {
+      "enabled": true,
+      "phone_e164": "+46XXXXXXXXX"
+    }
   },
   "webhook": {
     "enabled": false

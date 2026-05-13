@@ -38,7 +38,7 @@ const E164_RE = /^\+\d{8,15}$/;
 
 router.post("/", authed, async (req, res) => {
   const traceId = crypto.randomUUID();
-  const { tenant_id, to, lead_id } = req.body || {};
+  const { tenant_id, to, lead_id, lead_name, lead_business, lead_website } = req.body || {};
 
   if (!tenant_id) return res.status(400).json({ error: "tenant_id required" });
   if (!to || !E164_RE.test(to)) return res.status(400).json({ error: "to must be E.164 (e.g. +46701234567)" });
@@ -66,6 +66,9 @@ router.post("/", authed, async (req, res) => {
     wssUrl.searchParams.set("session-id", traceId);
     wssUrl.searchParams.set("caller", to);
     wssUrl.searchParams.set("direction", "outbound");
+    if (lead_name)     wssUrl.searchParams.set("lead_name",     lead_name);
+    if (lead_business) wssUrl.searchParams.set("lead_business", lead_business);
+    if (lead_website)  wssUrl.searchParams.set("lead_website",  lead_website);
 
     log("outbound_dial_attempt", { trace_id: traceId, tenant_id, from, to, lead_id: lead_id || null });
 
