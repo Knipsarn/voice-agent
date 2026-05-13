@@ -74,7 +74,7 @@ async function dialOutbound({ from, to, streamUrl, connectionId, clientState, tr
     from,
     connection_id: connectionId,
     stream_url: streamUrl,
-    stream_track: "both_tracks",
+    stream_track: "inbound_track",  // ONLY the lead's voice — not our own outbound echo
     stream_codec: "PCMU",
     stream_bidirectional_mode: "rtp",
     timeout_secs: 30,        // ring for up to 30s before giving up
