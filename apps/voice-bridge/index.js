@@ -231,8 +231,11 @@ wss.on("connection", async (phoneWs, req) => {
   let firstMessage = !fallback && tenantConfig.first_message_enabled
     ? (tenantConfig.first_message || null)
     : null;
-  if (firstMessage && leadName)     firstMessage = firstMessage.replace(/\{\{lead_name\}\}/g,     leadName.split(" ")[0]);
-  if (firstMessage && leadBusiness) firstMessage = firstMessage.replace(/\{\{lead_business\}\}/g, leadBusiness);
+  if (firstMessage) {
+    firstMessage = firstMessage.replace(/\{\{lead_name\}\}/g,     leadName ? leadName.split(" ")[0] : "");
+    firstMessage = firstMessage.replace(/\{\{lead_business\}\}/g, leadBusiness || "");
+    firstMessage = firstMessage.replace(/\s{2,}/g, " ").trim();
+  }
   const firstMessageDelayMs = tenantConfig?.first_message_delay_ms || 0;
   const transcriptionLanguage = tenantConfig?.transcription_language || null;
   const vadThreshold = tenantConfig?.vad_threshold ?? 0.5; // default 0.5; raise for noisy PSTN lines
