@@ -54,8 +54,14 @@ export async function patchReasoning(tenantId, reasoning_effort) {
   return cpJson("PATCH", `/tenants/${encodeURIComponent(tenantId)}/reasoning`, { reasoning_effort });
 }
 
-export async function outboundDial(tenantId, to) {
-  return cpJson("POST", `/outbound/dial`, { tenant_id: tenantId, to });
+export async function outboundDial(tenantId, to, { lead_name, lead_business, lead_website } = {}) {
+  return cpJson("POST", `/outbound/dial`, {
+    tenant_id: tenantId,
+    to,
+    ...(lead_name     && { lead_name }),
+    ...(lead_business && { lead_business }),
+    ...(lead_website  && { lead_website }),
+  });
 }
 
 export async function listNumbersForTenant(tenantId) {
