@@ -30,6 +30,7 @@
     "ai_option_digit": null,
     "voicemail_option_digit": null
   },
+  "vad_threshold": 0.3,
   "features": {
     "direct_to_gpt": true,
     "barge_in": true,

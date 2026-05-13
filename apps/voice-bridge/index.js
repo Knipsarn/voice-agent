@@ -87,6 +87,10 @@ wss.on("connection", async (phoneWs, req) => {
   let turnCountAssistant = 0;
   const transcripts = [];
 
+  // Barge-in tracking — used to truncate the assistant response when the user interrupts.
+  let currentAssistantItemId = null; // set on response.audio.delta, cleared on response.done
+  let assistantAudioMs = 0;          // cumulative ms of assistant audio sent to Telnyx this turn
+
   // OpenAI Realtime usage accumulator — summed across all response.done events
   // in this call. Used by the post-processor to compute exact cost per call
   // instead of the per-minute estimate.
@@ -421,6 +425,19 @@ wss.on("connection", async (phoneWs, req) => {
       switch (msg.type) {
         case "input_audio_buffer.speech_started":
           log("speech_started", { trace_id, tenant_id: tenantId || null, turn_user: turnCountUser + 1 });
+          // Barge-in: if the assistant is mid-response, cancel it and truncate the item
+          // so OpenAI knows how much audio was actually heard before the interruption.
+          if (currentAssistantItemId) {
+            openaiWs.send(JSON.stringify({ type: "response.cancel" }));
+            openaiWs.send(JSON.stringify({
+              type: "conversation.item.truncate",
+              item_id: currentAssistantItemId,
+              content_index: 0,
+              audio_end_ms: assistantAudioMs,
+            }));
+            currentAssistantItemId = null;
+            assistantAudioMs = 0;
+          }
           break;
 
         case "input_audio_buffer.speech_stopped":
@@ -473,6 +490,10 @@ wss.on("connection", async (phoneWs, req) => {
                 latency_ms: Date.now() - callStart,
               });
             }
+            // Track item ID and audio duration for barge-in truncation
+            if (msg.item_id) currentAssistantItemId = msg.item_id;
+            // G.711 ulaw: 8000 samples/sec, 1 byte/sample, base64 → each char ≈ 0.75 bytes
+            assistantAudioMs += Math.round((msg.delta.length * 0.75) / 8);
             if (isElks) {
               phoneWs.send(JSON.stringify({ t: "audio", data: msg.delta }));
             } else {
@@ -586,6 +607,8 @@ wss.on("connection", async (phoneWs, req) => {
           turnCountAssistant++;
           addRealtimeUsage(msg.response?.usage);
           log("response_done", { trace_id, tenant_id: tenantId || null, turn_assistant: turnCountAssistant });
+          currentAssistantItemId = null;
+          assistantAudioMs = 0;
           // Fire phone transfer after agent finishes speaking in the NEW mode.
           // awaitingTransferResponse = true means this response.done is for the OLD mode — skip.
           if (pendingPhoneTransfer) {
