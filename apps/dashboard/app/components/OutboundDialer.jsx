@@ -6,6 +6,7 @@ export function OutboundDialer({ tenantId }) {
   const [ownerName, setOwnerName] = useState("");
   const [businessName, setBusinessName] = useState("");
   const [website, setWebsite] = useState("");
+  const [provider, setProvider] = useState("telnyx");
   const [calling, setCalling] = useState(false);
   const [result, setResult] = useState(null);
   const [error, setError] = useState(null);
@@ -26,6 +27,7 @@ export function OutboundDialer({ tenantId }) {
         body: JSON.stringify({
           tenant_id: tenantId,
           to: phone,
+          provider,
           lead_name: ownerName || undefined,
           lead_business: businessName || undefined,
           lead_website: website || undefined,
@@ -94,6 +96,15 @@ export function OutboundDialer({ tenantId }) {
             className="flex-1 text-base text-ink bg-canvas border border-line rounded-lg px-3 py-2.5 mono placeholder:text-subtle focus:outline-none focus:ring-1 focus:ring-accent"
             disabled={calling}
           />
+          <select
+            value={provider}
+            onChange={e => setProvider(e.target.value)}
+            disabled={calling}
+            className="text-sm text-ink bg-canvas border border-line rounded-lg px-2 py-2.5 focus:outline-none focus:ring-1 focus:ring-accent"
+          >
+            <option value="telnyx">Telnyx</option>
+            <option value="elks">46elks</option>
+          </select>
           <button
             type="submit"
             disabled={calling || !phone}

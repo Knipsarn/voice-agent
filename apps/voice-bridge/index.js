@@ -89,7 +89,8 @@ wss.on("connection", async (phoneWs, req) => {
 
   // Barge-in tracking — used to truncate the assistant response when the user interrupts.
   let currentAssistantItemId = null; // set on response.audio.delta, cleared on response.done
-  let assistantAudioMs = 0;          // cumulative ms of assistant audio sent to Telnyx this turn
+  let assistantAudioMs = 0;          // cumulative ms of assistant audio sent this turn
+  let elksNeedsSendingHeader = false; // true after an elks interrupt — must re-send { t: "sending" } before next audio
 
   // OpenAI Realtime usage accumulator — summed across all response.done events
   // in this call. Used by the post-processor to compute exact cost per call
@@ -427,6 +428,21 @@ wss.on("connection", async (phoneWs, req) => {
       switch (msg.type) {
         case "input_audio_buffer.speech_started":
           log("speech_started", { trace_id, tenant_id: tenantId || null, turn_user: turnCountUser + 1, assistant_audio_ms: assistantAudioMs });
+          // 46elks supports { t: "interrupt" } to clear their audio buffer immediately.
+          // Also cancel OpenAI generation so no further audio is produced.
+          if (isElks && currentAssistantItemId) {
+            try { phoneWs.send(JSON.stringify({ t: "interrupt" })); } catch (_) {}
+            openaiWs.send(JSON.stringify({ type: "response.cancel" }));
+            openaiWs.send(JSON.stringify({
+              type: "conversation.item.truncate",
+              item_id: currentAssistantItemId,
+              content_index: 0,
+              audio_end_ms: assistantAudioMs,
+            }));
+            elksNeedsSendingHeader = true;
+            currentAssistantItemId = null;
+            assistantAudioMs = 0;
+          }
           break;
 
         case "input_audio_buffer.speech_stopped":
@@ -482,8 +498,16 @@ wss.on("connection", async (phoneWs, req) => {
             // Track item ID and audio duration for barge-in truncation
             if (msg.item_id) currentAssistantItemId = msg.item_id;
             // G.711 ulaw: 8000 samples/sec, 1 byte/sample, base64 → each char ≈ 0.75 bytes
-            assistantAudioMs += Math.round((msg.delta.length * 0.75) / 8);
+            // PCM 24kHz (elks): 24000 samples/sec × 2 bytes = 48000 bytes/sec
+            assistantAudioMs += isElks
+              ? Math.round((msg.delta.length * 0.75) / 48)
+              : Math.round((msg.delta.length * 0.75) / 8);
             if (isElks) {
+              // After an interrupt, 46elks requires a new { t: "sending" } before audio resumes
+              if (elksNeedsSendingHeader) {
+                phoneWs.send(JSON.stringify({ t: "sending", format: "pcm_24000" }));
+                elksNeedsSendingHeader = false;
+              }
               phoneWs.send(JSON.stringify({ t: "audio", data: msg.delta }));
             } else {
               phoneWs.send(JSON.stringify({ event: "media", media: { payload: msg.delta } }));

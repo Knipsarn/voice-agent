@@ -12,14 +12,14 @@ export async function POST(req) {
   let body;
   try { body = await req.json(); } catch { return Response.json({ error: "bad json" }, { status: 400 }); }
 
-  const { tenant_id, to, lead_name, lead_business, lead_website } = body || {};
+  const { tenant_id, to, lead_name, lead_business, lead_website, provider } = body || {};
   const tenantId = scope.admin ? tenant_id : scope.tenantId;
   if (!tenantId) return Response.json({ error: "tenant_id required" }, { status: 400 });
   if (!scope.admin && tenantId !== scope.tenantId) return Response.json({ error: "not your tenant" }, { status: 403 });
   if (!to) return Response.json({ error: "to required" }, { status: 400 });
 
   try {
-    const result = await outboundDial(tenantId, to, { lead_name, lead_business, lead_website });
+    const result = await outboundDial(tenantId, to, { lead_name, lead_business, lead_website, provider });
     return Response.json(result);
   } catch (err) {
     return Response.json({ error: err.message }, { status: err.status || 500 });

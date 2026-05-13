@@ -12,7 +12,7 @@ const TELEPHONY_URL = process.env.TELEPHONY_URL ||
 const API_KEY = process.env.CONTROL_PLANE_API_KEY || "";
 
 router.post("/dial", async (req, res) => {
-  const { tenant_id, to, lead_id, lead_name, lead_business, lead_website } = req.body || {};
+  const { tenant_id, to, lead_id, lead_name, lead_business, lead_website, provider } = req.body || {};
   if (!tenant_id) return res.status(400).json({ error: "tenant_id required" });
   if (!to) return res.status(400).json({ error: "to required" });
 
@@ -26,6 +26,7 @@ router.post("/dial", async (req, res) => {
       body: JSON.stringify({
         tenant_id, to,
         lead_id: lead_id || null,
+        ...(provider      && { provider }),
         ...(lead_name     && { lead_name }),
         ...(lead_business && { lead_business }),
         ...(lead_website  && { lead_website }),

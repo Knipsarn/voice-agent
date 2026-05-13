@@ -23,7 +23,8 @@
   },
   "knowledge_blocks": {},
   "phone_numbers": {
-    "primary_e164": "+46105200426"
+    "primary_e164": "+46105200426",
+    "elks_e164": "+46766860841"
   },
   "pbx": {
     "enabled": false,
