@@ -92,6 +92,13 @@ wss.on("connection", async (phoneWs, req) => {
   let assistantAudioMs = 0;          // cumulative ms of assistant audio sent this turn
   let elksNeedsSendingHeader = false; // true after an elks interrupt — must re-send { t: "sending" } before next audio
 
+  // Observability: track audio activity around barge-in to diagnose blackouts + delayed cutoffs.
+  let responseStartedAt = null;          // ms timestamp of latest response.created
+  let lastBargeInAt = null;              // ms timestamp of latest interrupt
+  let audioDeltasAfterBargeIn = 0;       // delta count post-interrupt (should be 0 if cancel works)
+  let audioBytesAfterBargeIn = 0;        // raw base64 byte total post-interrupt
+  let audioDeltasMissingSendHeader = 0;  // audio sent without prior {t:"sending"} (potential 46elks drop)
+
   // OpenAI Realtime usage accumulator — summed across all response.done events
   // in this call. Used by the post-processor to compute exact cost per call
   // instead of the per-minute estimate.
@@ -448,18 +455,39 @@ wss.on("connection", async (phoneWs, req) => {
 
       switch (msg.type) {
         case "input_audio_buffer.speech_started":
-          log("speech_started", { trace_id, tenant_id: tenantId || null, turn_user: turnCountUser + 1, assistant_audio_ms: assistantAudioMs });
+          log("speech_started", {
+            trace_id, tenant_id: tenantId || null,
+            turn_user: turnCountUser + 1,
+            assistant_audio_ms: assistantAudioMs,
+            ms_since_response_started: responseStartedAt ? Date.now() - responseStartedAt : null,
+            had_active_item: !!currentAssistantItemId,
+          });
           // 46elks supports { t: "interrupt" } to clear their audio buffer immediately.
           // Also cancel OpenAI generation so no further audio is produced.
           if (isElks && currentAssistantItemId) {
-            try { phoneWs.send(JSON.stringify({ t: "interrupt" })); } catch (_) {}
+            const truncItem = currentAssistantItemId;
+            const truncMs = assistantAudioMs;
+            let interruptSent = false;
+            try { phoneWs.send(JSON.stringify({ t: "interrupt" })); interruptSent = true; } catch (e) {
+              logError("elks_interrupt_send_failed", { trace_id, error: e.message });
+            }
             openaiWs.send(JSON.stringify({ type: "response.cancel" }));
             openaiWs.send(JSON.stringify({
               type: "conversation.item.truncate",
-              item_id: currentAssistantItemId,
+              item_id: truncItem,
               content_index: 0,
-              audio_end_ms: assistantAudioMs,
+              audio_end_ms: truncMs,
             }));
+            log("barge_in_fired", {
+              trace_id, tenant_id: tenantId || null,
+              item_id: truncItem,
+              truncate_at_ms: truncMs,
+              ms_since_response_started: responseStartedAt ? Date.now() - responseStartedAt : null,
+              elks_interrupt_sent: interruptSent,
+            });
+            lastBargeInAt = Date.now();
+            audioDeltasAfterBargeIn = 0;
+            audioBytesAfterBargeIn = 0;
             elksNeedsSendingHeader = true;
             currentAssistantItemId = null;
             assistantAudioMs = 0;
@@ -502,7 +530,13 @@ wss.on("connection", async (phoneWs, req) => {
           break;
 
         case "response.created":
-          log("response_started", { trace_id, tenant_id: tenantId || null, turn_assistant: turnCountAssistant + 1 });
+          log("response_started", {
+            trace_id, tenant_id: tenantId || null,
+            turn_assistant: turnCountAssistant + 1,
+            response_id: msg.response?.id || null,
+            ms_since_barge_in: lastBargeInAt ? Date.now() - lastBargeInAt : null,
+          });
+          responseStartedAt = Date.now();
           break;
 
         case "response.audio.delta":        // beta
@@ -516,8 +550,22 @@ wss.on("connection", async (phoneWs, req) => {
                 latency_ms: Date.now() - callStart,
               });
             }
-            // Track item ID and audio duration for barge-in truncation
-            if (msg.item_id) currentAssistantItemId = msg.item_id;
+            // Track when item_id transitions (new response taking over from cancelled one).
+            if (msg.item_id && msg.item_id !== currentAssistantItemId) {
+              log("assistant_item_changed", {
+                trace_id, tenant_id: tenantId || null,
+                from: currentAssistantItemId, to: msg.item_id,
+                ms_since_barge_in: lastBargeInAt ? Date.now() - lastBargeInAt : null,
+              });
+              currentAssistantItemId = msg.item_id;
+            } else if (msg.item_id) {
+              currentAssistantItemId = msg.item_id;
+            }
+            // Count deltas that arrive AFTER a barge-in for the same response (cancel lag).
+            if (lastBargeInAt && Date.now() - lastBargeInAt < 3000) {
+              audioDeltasAfterBargeIn++;
+              audioBytesAfterBargeIn += msg.delta.length;
+            }
             // G.711 ulaw: 8000 samples/sec, 1 byte/sample, base64 → each char ≈ 0.75 bytes
             // PCM 24kHz (elks): 24000 samples/sec × 2 bytes = 48000 bytes/sec
             assistantAudioMs += isElks
@@ -640,9 +688,21 @@ wss.on("connection", async (phoneWs, req) => {
         case "response.done":
           turnCountAssistant++;
           addRealtimeUsage(msg.response?.usage);
-          log("response_done", { trace_id, tenant_id: tenantId || null, turn_assistant: turnCountAssistant });
+          log("response_done", {
+            trace_id, tenant_id: tenantId || null,
+            turn_assistant: turnCountAssistant,
+            status: msg.response?.status || null,
+            status_details: msg.response?.status_details?.reason || msg.response?.status_details?.type || null,
+            response_id: msg.response?.id || null,
+            duration_ms: responseStartedAt ? Date.now() - responseStartedAt : null,
+            audio_deltas_after_barge_in: audioDeltasAfterBargeIn,
+            audio_bytes_after_barge_in: audioBytesAfterBargeIn,
+          });
           currentAssistantItemId = null;
           assistantAudioMs = 0;
+          responseStartedAt = null;
+          audioDeltasAfterBargeIn = 0;
+          audioBytesAfterBargeIn = 0;
           // Fire phone transfer after agent finishes speaking in the NEW mode.
           // awaitingTransferResponse = true means this response.done is for the OLD mode — skip.
           if (pendingPhoneTransfer) {
