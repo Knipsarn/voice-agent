@@ -23,7 +23,7 @@ steps:
       - --region=europe-west1
       - --project=ldk-clean
       - --update-secrets=TELNYX_API_KEY=TELNYX_API_KEY:latest,TELNYX_PUBLIC_KEY=TELNYX_PUBLIC_KEY:latest,CONTROL_PLANE_API_KEY=CONTROL_PLANE_API_KEY:latest,ELK_API_USER=ELK_API_USER:latest,ELK_API_PASS=ELK_API_PASS:latest,ELK_FROM_NUMBER=ELK_FROM_NUMBER:latest
-      - --set-env-vars=BRIDGE_BASE_URL=https://voice-bridge-service-360579353014.europe-west1.run.app/,TELNYX_OUTBOUND_CONNECTION_ID=2946878804032751101,TELEPHONY_BASE_URL=https://telephony-service-360579353014.europe-west1.run.app
+      - --set-env-vars=BRIDGE_BASE_URL=https://voice-bridge-service-360579353014.europe-west1.run.app/,TELNYX_OUTBOUND_CONNECTION_ID=2946878804032751101,TELEPHONY_BASE_URL=https://telephony-service-360579353014.europe-west1.run.app,ELK_WEBSOCKET_NUMBER=+4600700226
       - --allow-unauthenticated
       - --no-cpu-throttling
       - --min-instances=0

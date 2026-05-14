@@ -58,16 +58,17 @@ router.post("/voice_start", (req, res) => {
   // Store context so bridge can fetch it by callid after WebSocket hello.
   storeContext(callid, { tenant_id: tenantId, session_id: sessionId, caller: callerE164, lead_name: leadName, lead_business: leadBusiness, lead_website: leadWebsite });
 
-  // Route to our virtual 46elks number, which has voice_start = wss://bridge/elks?tenant=...
-  // configured in the 46elks dashboard. This causes 46elks to open a WebSocket to the bridge.
-  const elksNumber = process.env.ELK_FROM_NUMBER;
-  if (!elksNumber) {
-    logError("elks_voice_start_no_number", { callid });
-    return res.status(500).json({ error: "ELK_FROM_NUMBER not configured" });
+  // Route to our 46elks "websocket-number" (a special resource provisioned by 46elks support).
+  // That number has voice_start = wss://bridge/elks?tenant=... configured in the dashboard,
+  // so 46elks opens a WebSocket to the bridge when the call is routed to it.
+  const wsNumber = process.env.ELK_WEBSOCKET_NUMBER;
+  if (!wsNumber) {
+    logError("elks_voice_start_no_ws_number", { callid });
+    return res.status(500).json({ error: "ELK_WEBSOCKET_NUMBER not configured" });
   }
 
-  log("elks_voice_start", { tenant_id: tenantId, session_id: sessionId, callid, caller: callerE164, connect_to: elksNumber });
-  res.json({ connect: elksNumber });
+  log("elks_voice_start", { tenant_id: tenantId, session_id: sessionId, callid, caller: callerE164, connect_to: wsNumber });
+  res.json({ connect: wsNumber });
 });
 
 module.exports = router;
