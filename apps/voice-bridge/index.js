@@ -313,10 +313,11 @@ wss.on("connection", async (phoneWs, req) => {
       latency_ms: openaiReadyTime - callStart,
     });
 
-    // Map internal audio format string to API format objects
+    // Map internal audio format string to API format objects.
+    // GA API requires `rate` for PCM (46elks 24kHz HD); PCMU is fixed at 8kHz.
     const gaAudioFormat = audioFormat === "g711_ulaw"
-      ? { type: "audio/pcmu" }
-      : { type: "audio/pcm" };
+      ? { type: "audio/pcmu", rate: 8000 }
+      : { type: "audio/pcm", rate: 24000 };
 
     // Build tools
     let tools;
