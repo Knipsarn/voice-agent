@@ -12,8 +12,8 @@ function getAuth() {
 
 /**
  * Initiate an outbound call via 46elks.
- * When the recipient answers, 46elks POSTs to voiceStartUrl.
- * That endpoint should respond with { "connect": "wss://..." } to route audio to the bridge.
+ * voiceStartUrl must be a wss:// URL — 46elks opens a WebSocket directly to the bridge
+ * when the recipient answers, bypassing any HTTP webhook indirection.
  *
  * @param {{ from: string, to: string, voiceStartUrl: string, traceId: string }} opts
  * @returns {Promise<{ ok: boolean, callid?: string, error?: string }>}

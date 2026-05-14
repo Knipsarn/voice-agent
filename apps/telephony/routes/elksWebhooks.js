@@ -1,10 +1,9 @@
 /**
- * routes/elksWebhooks.js — 46elks webhook callbacks.
+ * routes/elksWebhooks.js — 46elks webhook callbacks (currently unused for outbound).
  *
- * POST /webhooks/elks/voice_start
- *   Called by 46elks when an outbound call is answered.
- *   Query params carry the session context set when we initiated the call.
- *   Responds with { "connect": "wss://..." } to route audio to the bridge.
+ * Outbound calls pass a wss:// voice_start URL directly to the 46elks API, so 46elks
+ * opens a WebSocket to the bridge without hitting an HTTP webhook first.
+ * This file is kept for any future inbound or status webhook needs.
  */
 
 const express = require("express");

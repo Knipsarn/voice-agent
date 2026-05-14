@@ -63,13 +63,16 @@ router.post("/", authed, async (req, res) => {
     let result;
 
     if (useElks) {
-      // 46elks: we provide a voice_start webhook URL. When answered, 46elks POSTs there
-      // and we respond with the bridge WSS URL. Context travels via query params.
-      const telephonyBase = process.env.TELEPHONY_BASE_URL;
-      if (!telephonyBase) return res.status(500).json({ error: "TELEPHONY_BASE_URL not configured" });
-      const voiceStartUrl = new URL(`${telephonyBase}/webhooks/elks/voice_start`);
-      voiceStartUrl.searchParams.set("tenant_id",   tenant_id);
-      voiceStartUrl.searchParams.set("session_id",  traceId);
+      // 46elks supports wss:// directly in voice_start — it opens a WebSocket to the
+      // bridge when the call is answered. Pass context as query params on the WSS URL.
+      const base = process.env.BRIDGE_BASE_URL;
+      if (!base) return res.status(500).json({ error: "BRIDGE_BASE_URL not configured" });
+      const voiceStartUrl = new URL(base);
+      voiceStartUrl.protocol = "wss:";
+      voiceStartUrl.pathname = "/elks";
+      voiceStartUrl.searchParams.set("tenant",      tenant_id);
+      voiceStartUrl.searchParams.set("session-id",  traceId);
+      voiceStartUrl.searchParams.set("direction",   "outbound");
       if (lead_name)     voiceStartUrl.searchParams.set("lead_name",     lead_name);
       if (lead_business) voiceStartUrl.searchParams.set("lead_business", lead_business);
       if (lead_website)  voiceStartUrl.searchParams.set("lead_website",  lead_website);
