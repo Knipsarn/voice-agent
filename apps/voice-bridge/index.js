@@ -99,6 +99,12 @@ wss.on("connection", async (phoneWs, req) => {
   let audioBytesAfterBargeIn = 0;        // raw base64 byte total post-interrupt
   let audioDeltasMissingSendHeader = 0;  // audio sent without prior {t:"sending"} (potential 46elks drop)
 
+  // Phone-audio playback grace window: OpenAI's response.done fires when generation ends,
+  // but the audio is still in-flight on the wire for 1-3s. During that window the user
+  // perceives the agent as "still speaking" — so interrupts must still work.
+  let phoneAudioActiveUntil = 0;         // ms timestamp; phone audio likely still playing until then
+  let assistantAudioMsThisResponse = 0;  // audio duration emitted in the current response (for end_call guard)
+
   // OpenAI Realtime usage accumulator — summed across all response.done events
   // in this call. Used by the post-processor to compute exact cost per call
   // instead of the per-minute estimate.
@@ -454,45 +460,56 @@ wss.on("connection", async (phoneWs, req) => {
       const msg = JSON.parse(raw.toString());
 
       switch (msg.type) {
-        case "input_audio_buffer.speech_started":
+        case "input_audio_buffer.speech_started": {
+          const phoneActive = Date.now() < phoneAudioActiveUntil;
+          const hasActiveItem = !!currentAssistantItemId;
           log("speech_started", {
             trace_id, tenant_id: tenantId || null,
             turn_user: turnCountUser + 1,
             assistant_audio_ms: assistantAudioMs,
             ms_since_response_started: responseStartedAt ? Date.now() - responseStartedAt : null,
-            had_active_item: !!currentAssistantItemId,
+            had_active_item: hasActiveItem,
+            phone_audio_still_playing: phoneActive && !hasActiveItem,
           });
-          // 46elks supports { t: "interrupt" } to clear their audio buffer immediately.
-          // Also cancel OpenAI generation so no further audio is produced.
-          if (isElks && currentAssistantItemId) {
-            const truncItem = currentAssistantItemId;
-            const truncMs = assistantAudioMs;
+          // Two reasons to fire a barge-in:
+          // (1) OpenAI is actively generating → cancel + truncate
+          // (2) OpenAI is done but phone audio is still buffered/playing → clear the buffer
+          if (isElks && (hasActiveItem || phoneActive)) {
             let interruptSent = false;
             try { phoneWs.send(JSON.stringify({ t: "interrupt" })); interruptSent = true; } catch (e) {
               logError("elks_interrupt_send_failed", { trace_id, error: e.message });
             }
-            openaiWs.send(JSON.stringify({ type: "response.cancel" }));
-            openaiWs.send(JSON.stringify({
-              type: "conversation.item.truncate",
-              item_id: truncItem,
-              content_index: 0,
-              audio_end_ms: truncMs,
-            }));
+            elksNeedsSendingHeader = true;
+            // Only send response.cancel + truncate when OpenAI actually has an active response.
+            // After response_done the item is completed and these would error.
+            if (hasActiveItem) {
+              const truncItem = currentAssistantItemId;
+              const truncMs = assistantAudioMs;
+              openaiWs.send(JSON.stringify({ type: "response.cancel" }));
+              openaiWs.send(JSON.stringify({
+                type: "conversation.item.truncate",
+                item_id: truncItem,
+                content_index: 0,
+                audio_end_ms: truncMs,
+              }));
+            }
             log("barge_in_fired", {
               trace_id, tenant_id: tenantId || null,
-              item_id: truncItem,
-              truncate_at_ms: truncMs,
+              item_id: currentAssistantItemId,
+              truncate_at_ms: assistantAudioMs,
               ms_since_response_started: responseStartedAt ? Date.now() - responseStartedAt : null,
+              reason: hasActiveItem ? "active_response" : "phone_audio_buffered",
               elks_interrupt_sent: interruptSent,
             });
             lastBargeInAt = Date.now();
             audioDeltasAfterBargeIn = 0;
             audioBytesAfterBargeIn = 0;
-            elksNeedsSendingHeader = true;
             currentAssistantItemId = null;
             assistantAudioMs = 0;
+            phoneAudioActiveUntil = 0;
           }
           break;
+        }
 
         case "input_audio_buffer.speech_stopped":
           log("speech_stopped", { trace_id, tenant_id: tenantId || null });
@@ -537,6 +554,7 @@ wss.on("connection", async (phoneWs, req) => {
             ms_since_barge_in: lastBargeInAt ? Date.now() - lastBargeInAt : null,
           });
           responseStartedAt = Date.now();
+          assistantAudioMsThisResponse = 0;
           break;
 
         case "response.audio.delta":        // beta
@@ -568,9 +586,11 @@ wss.on("connection", async (phoneWs, req) => {
             }
             // G.711 ulaw: 8000 samples/sec, 1 byte/sample, base64 → each char ≈ 0.75 bytes
             // PCM 24kHz (elks): 24000 samples/sec × 2 bytes = 48000 bytes/sec
-            assistantAudioMs += isElks
+            const deltaMs = isElks
               ? Math.round((msg.delta.length * 0.75) / 48)
               : Math.round((msg.delta.length * 0.75) / 8);
+            assistantAudioMs += deltaMs;
+            assistantAudioMsThisResponse += deltaMs;
             if (isElks) {
               // After an interrupt, 46elks requires a new { t: "sending" } before audio resumes
               if (elksNeedsSendingHeader) {
@@ -590,6 +610,30 @@ wss.on("connection", async (phoneWs, req) => {
             const fnName = msg.item.name;
 
             if (fnName === "end_call") {
+              // Guard: agent must say a real farewell before hanging up. If end_call
+              // fires in a response with effectively no spoken audio, reject and force
+              // the model to speak first.
+              const FAREWELL_MIN_MS = 600;
+              if (assistantAudioMsThisResponse < FAREWELL_MIN_MS) {
+                log("end_call_blocked_no_farewell", {
+                  trace_id, tenant_id: tenantId || null,
+                  call_id: msg.item.call_id,
+                  audio_ms_this_response: assistantAudioMsThisResponse,
+                });
+                openaiWs.send(JSON.stringify({
+                  type: "conversation.item.create",
+                  item: {
+                    type: "function_call_output",
+                    call_id: msg.item.call_id,
+                    output: JSON.stringify({
+                      success: false,
+                      error: "Du måste säga ett kort avsked till uppringaren (t.ex. 'Tack för pratstunden, ha en bra dag!') INNAN du ringer end_call. Försök igen efter att du sagt hejdå."
+                    })
+                  }
+                }));
+                openaiWs.send(JSON.stringify({ type: "response.create" }));
+                break;
+              }
               log("end_call_tool", { trace_id, tenant_id: tenantId || null, call_id: msg.item.call_id });
               openaiWs.send(JSON.stringify({
                 type: "conversation.item.create",
@@ -698,6 +742,10 @@ wss.on("connection", async (phoneWs, req) => {
             audio_deltas_after_barge_in: audioDeltasAfterBargeIn,
             audio_bytes_after_barge_in: audioBytesAfterBargeIn,
           });
+          // Keep audio-playback grace window so late user interrupts still clear 46elks buffer.
+          // Phone audio finishes playing roughly assistantAudioMsThisResponse from when streaming
+          // started; cap at 3.5s to avoid swallowing legitimate next-turn user speech.
+          phoneAudioActiveUntil = Date.now() + Math.min(assistantAudioMsThisResponse || 0, 3500);
           currentAssistantItemId = null;
           assistantAudioMs = 0;
           responseStartedAt = null;

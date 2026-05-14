@@ -3,12 +3,13 @@ import { redirect } from "next/navigation";
 
 import { authOptions } from "@/lib/auth-config";
 import { effectiveScope } from "@/lib/tenant-map";
-import { getTenant, listNumbersForTenant, getSettings } from "@/lib/control-plane";
+import { getTenant, listNumbersForTenant, getSettings, getPrompt } from "@/lib/control-plane";
 import { AppShell } from "../components/AppShell";
 import { Icon } from "../components/Icon";
 import { GreetingEditor } from "../components/GreetingEditor";
 import { VoiceModelPicker } from "../components/VoiceModelPicker";
 import { OutboundDialer } from "../components/OutboundDialer";
+import { PromptEditor } from "../components/PromptEditor";
 
 function pickTenantId(scope, searchParams) {
   if (scope.admin) return searchParams?.tenant || null;
@@ -33,12 +34,13 @@ export default async function AgentPage({ searchParams }) {
     redirect("/admin");
   }
 
-  let tenant, numbersRes, settings;
+  let tenant, numbersRes, settings, promptData;
   try {
-    [tenant, numbersRes, settings] = await Promise.all([
+    [tenant, numbersRes, settings, promptData] = await Promise.all([
       getTenant(tenantId),
       listNumbersForTenant(tenantId).catch(() => ({ numbers: [] })),
       getSettings(tenantId).catch(() => ({})),
+      getPrompt(tenantId).catch(() => ({ sections: {} })),
     ]);
   } catch (err) {
     return (
@@ -161,17 +163,17 @@ export default async function AgentPage({ searchParams }) {
           </Card>
         )}
 
-        {/* Admin-only: full system prompt */}
-        {scope.admin && (
-          <Card title="System prompt">
-            <p className="text-xs text-muted mb-3">
-              Edit via Git workflow (see CLAUDE.md §9). Direct edits not exposed in dashboard.
-            </p>
-            <pre className="bg-line-soft border border-line rounded-md p-4 text-xs text-ink whitespace-pre-wrap font-mono max-h-96 overflow-auto leading-relaxed">
-{tenant.instructions?.base || "(no system prompt set)"}
-            </pre>
-          </Card>
-        )}
+        {/* System prompt — customer-editable */}
+        <Card title="Systemprompt">
+          <p className="text-xs text-muted mb-4">
+            Detta är instruktionerna som styr hur din AI-assistent pratar, vad den fokuserar på och vilka regler den följer. Ändringar går live direkt — testa alltid efter en ändring.
+          </p>
+          <PromptEditor
+            tenantId={tenantId}
+            sections={promptData?.sections}
+            isAdmin={true}
+          />
+        </Card>
 
         {scope.admin && tenant._meta && (
           <Card title="Configuration metadata">

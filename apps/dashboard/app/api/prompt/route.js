@@ -29,23 +29,28 @@ export async function GET(req) {
   }
 }
 
-// PATCH /api/prompt — admin only, update a prompt section
+// PATCH /api/prompt — update a prompt section. Admins can edit any tenant;
+// tenant users can edit only their own tenant.
 export async function PATCH(req) {
   const session = await getServerSession(authOptions);
   if (!session?.user?.email) return Response.json({ error: "unauthenticated" }, { status: 401 });
   const scope = userScope(session.user.email);
-  if (!scope.admin) return Response.json({ error: "admin only" }, { status: 403 });
+  if (!scope.admin && !scope.tenantId) return Response.json({ error: "no access" }, { status: 403 });
 
   let body;
   try { body = await req.json(); } catch { return Response.json({ error: "bad json" }, { status: 400 }); }
 
   const { tenant_id, section, content } = body || {};
-  if (!tenant_id) return Response.json({ error: "tenant_id required" }, { status: 400 });
+  const effectiveTenantId = scope.admin ? tenant_id : scope.tenantId;
+  if (!effectiveTenantId) return Response.json({ error: "tenant_id required" }, { status: 400 });
+  if (!scope.admin && tenant_id && tenant_id !== scope.tenantId) {
+    return Response.json({ error: "not your tenant" }, { status: 403 });
+  }
   if (!section) return Response.json({ error: "section required" }, { status: 400 });
   if (content === undefined) return Response.json({ error: "content required" }, { status: 400 });
 
   try {
-    return Response.json(await updatePromptSection(tenant_id, section, content));
+    return Response.json(await updatePromptSection(effectiveTenantId, section, content));
   } catch (err) {
     return Response.json({ error: err.message }, { status: err.status || 500 });
   }

@@ -100,10 +100,11 @@ export function OutboundDialer({ tenantId }) {
             value={provider}
             onChange={e => setProvider(e.target.value)}
             disabled={calling}
+            title="Telnyx kopplar samtalet direkt utan ton. 46elks levererar HD-ljud (24 kHz) men har en kort kopplingston i början på grund av deras nätverksrutning."
             className="text-sm text-ink bg-canvas border border-line rounded-lg px-2 py-2.5 focus:outline-none focus:ring-1 focus:ring-accent"
           >
-            <option value="telnyx">Telnyx</option>
-            <option value="elks">46elks</option>
+            <option value="telnyx">Telnyx · standard 8 kHz</option>
+            <option value="elks">46elks · HD 24 kHz</option>
           </select>
           <button
             type="submit"
@@ -114,6 +115,11 @@ export function OutboundDialer({ tenantId }) {
           </button>
         </div>
       </form>
+
+      <p className="text-xs text-muted mt-3 leading-relaxed">
+        <strong className="text-ink">Telnyx</strong> kopplar direkt utan ton (8 kHz, vanlig telefonkvalitet).{" "}
+        <strong className="text-ink">46elks</strong> ger renare HD-ljud (24 kHz) men har en kort kopplingston när mottagaren svarar — en bieffekt av deras nätverksrutning.
+      </p>
 
       {error && (
         <div className="mt-4 bg-danger/5 border border-danger/20 text-danger text-sm rounded-lg px-3 py-2">
