@@ -22,8 +22,8 @@ steps:
       - --image=gcr.io/ldk-clean/dashboard-service:latest
       - --region=europe-west1
       - --project=ldk-clean
-      - --update-secrets=NEXTAUTH_SECRET=NEXTAUTH_SECRET:latest,GOOGLE_CLIENT_ID=GOOGLE_CLIENT_ID:latest,GOOGLE_CLIENT_SECRET=GOOGLE_CLIENT_SECRET:latest,CONTROL_PLANE_API_KEY=CONTROL_PLANE_API_KEY:latest
-      - --set-env-vars=CONTROL_PLANE_BASE_URL=https://control-plane-service-360579353014.europe-west1.run.app,DASHBOARD_ADMIN_EMAILS=nils.wahlin@snmintegrations.se,NEXTAUTH_URL=https://app.finnai.se
+      - --update-secrets=NEXTAUTH_SECRET=NEXTAUTH_SECRET:latest,GOOGLE_CLIENT_ID=GOOGLE_CLIENT_ID:latest,GOOGLE_CLIENT_SECRET=GOOGLE_CLIENT_SECRET:latest,CONTROL_PLANE_API_KEY=CONTROL_PLANE_API_KEY:latest,DASHBOARD_CREDENTIALS_EMAIL=DASHBOARD_CREDENTIALS_EMAIL:latest,DASHBOARD_CREDENTIALS_PASSWORD=DASHBOARD_CREDENTIALS_PASSWORD:latest
+      - --set-env-vars=CONTROL_PLANE_BASE_URL=https://control-plane-service-360579353014.europe-west1.run.app,DASHBOARD_ADMIN_EMAILS=nils.wahlin@snmintegrations.se,NEXTAUTH_URL=https://app.finnai.se,DASHBOARD_TENANT_EMAILS=sam.kjellkvist@techtell.se=telness-outbound
       - --allow-unauthenticated
       - --no-cpu-throttling
       - --min-instances=0
