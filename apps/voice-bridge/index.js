@@ -79,7 +79,11 @@ const wss = new WebSocketServer({ server });
 // ─── Per-connection handler ───────────────────────────────────────────────────
 
 wss.on("connection", async (phoneWs, req) => {
-  const trace_id = crypto.randomUUID();
+  // Use the trace_id supplied by telephony-service (via ?session-id=...) so the
+  // call_sessions doc written by telephony seed and the bridge end-of-call append
+  // share the same doc id. Fall back to a new UUID for inbound paths that don't pass one.
+  const initialQuery = url.parse(req.url, true).query;
+  const trace_id = initialQuery["session-id"] || crypto.randomUUID();
   const callStart = Date.now();
   let openaiReadyTime = null;
   let firstAudioSent = false;

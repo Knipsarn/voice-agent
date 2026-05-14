@@ -107,7 +107,11 @@ async function updateOnHangup({ payload, traceId }) {
  * Doc id = callControlId when Telnyx, otherwise traceId (46elks doesn't expose one).
  */
 async function createOnOutboundInitiated({ traceId, tenantId, from, to, provider, callControlId, leadId }) {
-  const docId = callControlId || traceId;
+  // Outbound docs are keyed by trace_id (unified across providers). Telnyx's
+  // call_control_id is stored as a field but NOT used as the doc id, because we
+  // can't propagate it into the bridge's WSS URL before the dial returns it.
+  // Using trace_id keeps the seed and the bridge's writeBridgeData in sync.
+  const docId = traceId;
   if (!docId) {
     logError("call_session_outbound_skipped", { trace_id: traceId, reason: "no_id" });
     return;
