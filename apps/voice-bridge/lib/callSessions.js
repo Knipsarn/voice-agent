@@ -60,6 +60,7 @@ async function writeBridgeData({
     turn_count_user: turnCountUser || 0,
     turn_count_assistant: turnCountAssistant || 0,
     duration_ms_bridge: durationMs || null,
+    duration_ms: durationMs || null,
     voice: voice || null,
     realtime_model: realtimeModel || null,
     workflow_enabled: Boolean(workflowEnabled),
@@ -67,6 +68,11 @@ async function writeBridgeData({
     final_mode: currentMode || null,
     transfer_fired: Boolean(transferFired),
     realtime_usage: realtimeUsage || null,
+    // Mark call complete so the post-processor picks it up. For Telnyx outbound,
+    // the Telnyx hangup webhook also writes this — last-write-wins, both agree.
+    status: "completed",
+    hangup_at: FieldValue.serverTimestamp(),
+    summary_pending: true,
     // Seed tenant_id + direction here too in case the telephony-side seed didn't
     // run (older calls / edge cases). Never re-set initiated_at — that's owned
     // by the side that seeded the doc and overwriting it loses the real start time.

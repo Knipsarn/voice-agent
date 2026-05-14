@@ -23,7 +23,7 @@ steps:
       - --region=europe-west1
       - --project=ldk-clean
       - --update-secrets=TELNYX_API_KEY=TELNYX_API_KEY:latest,POST_PROCESSOR_SECRET=POST_PROCESSOR_SECRET:latest
-      - --set-env-vars=POST_PROCESSOR_URL=https://post-processor-service-360579353014.europe-west1.run.app,TELEPHONY_URL=https://telephony-service-360579353014.europe-west1.run.app
+      - --set-env-vars=POST_PROCESSOR_URL=https://post-processor-service-360579353014.europe-west1.run.app,TELEPHONY_URL=https://telephony-service-360579353014.europe-west1.run.app,TENANT_PROVIDER=firestore
       - --quiet
 
   - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
