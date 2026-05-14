@@ -327,9 +327,10 @@ wss.on("connection", async (phoneWs, req) => {
     });
 
     // Map internal audio format string to API format objects.
-    // GA API requires `rate` for PCM (46elks 24kHz HD); PCMU is fixed at 8kHz.
+    // GA API: PCM requires `rate` (46elks 24kHz HD). PCMU rejects `rate`
+    // (fixed at 8kHz by spec — "Unknown parameter: 'session.audio.input.format.rate'").
     const gaAudioFormat = audioFormat === "g711_ulaw"
-      ? { type: "audio/pcmu", rate: 8000 }
+      ? { type: "audio/pcmu" }
       : { type: "audio/pcm", rate: 24000 };
 
     // Build tools
