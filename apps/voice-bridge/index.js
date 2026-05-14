@@ -896,6 +896,8 @@ wss.on("connection", async (phoneWs, req) => {
       await writeCallSessionBridgeData({
         callControlId,
         traceId: trace_id,
+        tenantId,
+        direction: tenantConfig?.direction || (isElks ? "outbound" : null),
         transcript: transcripts,
         turnCountUser,
         turnCountAssistant,
@@ -914,7 +916,10 @@ wss.on("connection", async (phoneWs, req) => {
 
     // --- Fire post-processor immediately (replaces every-minute polling) ---
     // Fire-and-forget: don't await. If this fails, the hourly safety-net scheduler picks it up.
-    if (callControlId && process.env.POST_PROCESSOR_URL) {
+    // Use call_control_id when available (Telnyx) or trace_id (46elks) — call_sessions
+    // doc id matches whichever side seeded the doc.
+    const ppDocId = callControlId || trace_id;
+    if (ppDocId && process.env.POST_PROCESSOR_URL) {
       const ppUrl = `${process.env.POST_PROCESSOR_URL.replace(/\/$/, "")}/process`;
       const ppHeaders = { "Content-Type": "application/json" };
       if (process.env.POST_PROCESSOR_SECRET) {
@@ -923,9 +928,9 @@ wss.on("connection", async (phoneWs, req) => {
       fetch(ppUrl, {
         method: "POST",
         headers: ppHeaders,
-        body: JSON.stringify({ call_control_id: callControlId }),
+        body: JSON.stringify({ call_control_id: ppDocId }),
       })
-        .then((r) => log("post_processor_triggered", { trace_id, status: r.status }))
+        .then((r) => log("post_processor_triggered", { trace_id, doc_id: ppDocId, status: r.status }))
         .catch((err) => logError("post_processor_trigger_failed", { trace_id, error: err.message }));
     }
 

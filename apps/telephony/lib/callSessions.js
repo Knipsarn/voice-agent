@@ -101,4 +101,34 @@ async function updateOnHangup({ payload, traceId }) {
   );
 }
 
-module.exports = { createOnInitiated, updateOnAnswered, updateOnHangup };
+/**
+ * Outbound calls: telephony-service initiates the call before any provider
+ * webhook fires. We seed the call_session here so /calls history shows it.
+ * Doc id = callControlId when Telnyx, otherwise traceId (46elks doesn't expose one).
+ */
+async function createOnOutboundInitiated({ traceId, tenantId, from, to, provider, callControlId, leadId }) {
+  const docId = callControlId || traceId;
+  if (!docId) {
+    logError("call_session_outbound_skipped", { trace_id: traceId, reason: "no_id" });
+    return;
+  }
+  const data = {
+    call_control_id: callControlId || null,
+    trace_id: traceId,
+    tenant_id: tenantId,
+    direction: "outbound",
+    provider: provider || null,
+    from_number: from || null,
+    to_number: to || null,
+    lead_id: leadId || null,
+    status: "active",
+    initiated_at: FieldValue.serverTimestamp(),
+  };
+  try {
+    await getDb().collection(COLLECTION).doc(docId).set(data, { merge: true });
+  } catch (err) {
+    logError("call_session_outbound_write_error", { trace_id: traceId, doc_id: docId, error: err.message });
+  }
+}
+
+module.exports = { createOnInitiated, updateOnAnswered, updateOnHangup, createOnOutboundInitiated };

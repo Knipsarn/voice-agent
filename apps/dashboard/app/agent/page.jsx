@@ -79,8 +79,8 @@ export default async function AgentPage({ searchParams }) {
           <OutboundDialer tenantId={tenantId} />
         )}
 
-        {/* Test your assistant callout */}
-        {numbers.length > 0 && (
+        {/* Test your assistant callout — only meaningful for inbound tenants. */}
+        {tenant.direction !== "outbound" && numbers.length > 0 && (
           <TestYourAI
             number={numbers[0].e164}
             voice={tenant.voice}

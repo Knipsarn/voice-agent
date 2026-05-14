@@ -17,6 +17,7 @@ const { Firestore } = require("@google-cloud/firestore");
 const { log, logError } = require("../lib/log");
 const { dialOutbound } = require("../lib/telnyxClient");
 const { dialElksOutbound } = require("../lib/elksClient");
+const { createOnOutboundInitiated } = require("../lib/callSessions");
 
 const router = express.Router();
 const TENANTS = "tenants";
@@ -83,6 +84,14 @@ router.post("/", authed, async (req, res) => {
         return res.status(502).json({ error: "elks_dial_failed", detail: result.error });
       }
 
+      // Seed call_sessions so /calls history shows this call. Doc id = traceId
+      // since 46elks has no call_control_id concept; bridge appends transcript.
+      await createOnOutboundInitiated({
+        traceId, tenantId: tenant_id, from, to,
+        provider: "elks",
+        leadId: lead_id || null,
+      });
+
       return res.status(202).json({ ok: true, provider: "elks", tenant_id, from, to, callid: result.callid, trace_id: traceId });
     }
 
@@ -112,6 +121,15 @@ router.post("/", authed, async (req, res) => {
       logError("outbound_dial_failed", { trace_id: traceId, tenant_id, provider: "telnyx", to, error: result.error, status: result.status });
       return res.status(502).json({ error: "telnyx_dial_failed", detail: result.error });
     }
+
+    // Seed call_sessions so /calls history shows this call. Doc id = call_control_id
+    // (Telnyx native); bridge will append transcript via Phase B.2 writer.
+    await createOnOutboundInitiated({
+      traceId, tenantId: tenant_id, from, to,
+      provider: "telnyx",
+      callControlId: result.call_control_id,
+      leadId: lead_id || null,
+    });
 
     res.status(202).json({ ok: true, provider: "telnyx", tenant_id, from, to, call_control_id: result.call_control_id, trace_id: traceId });
   } catch (err) {

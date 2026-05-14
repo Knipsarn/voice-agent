@@ -32,6 +32,8 @@ function logError(event, fields) {
 async function writeBridgeData({
   callControlId,
   traceId,
+  tenantId,
+  direction,
   transcript,
   turnCountUser,
   turnCountAssistant,
@@ -44,8 +46,10 @@ async function writeBridgeData({
   transferFired,
   realtimeUsage,
 }) {
-  if (!callControlId) {
-    log("call_session_bridge_skip", { trace_id: traceId, reason: "no_call_control_id" });
+  // Doc id = call_control_id when Telnyx provides one; otherwise trace_id (46elks).
+  const docId = callControlId || traceId;
+  if (!docId) {
+    log("call_session_bridge_skip", { trace_id: traceId, reason: "no_doc_id" });
     return;
   }
 
@@ -63,19 +67,24 @@ async function writeBridgeData({
     final_mode: currentMode || null,
     transfer_fired: Boolean(transferFired),
     realtime_usage: realtimeUsage || null,
+    // Seed tenant_id + direction here too in case the telephony-side seed didn't
+    // run (older calls / edge cases). Never re-set initiated_at — that's owned
+    // by the side that seeded the doc and overwriting it loses the real start time.
+    ...(tenantId  ? { tenant_id: tenantId } : {}),
+    ...(direction ? { direction } : {}),
   };
 
   try {
-    await getDb().collection("call_sessions").doc(callControlId).set(data, { merge: true });
+    await getDb().collection("call_sessions").doc(docId).set(data, { merge: true });
     log("call_session_bridge_written", {
       trace_id: traceId,
-      call_control_id: callControlId,
+      doc_id: docId,
       transcript_turns: data.transcript.length,
     });
   } catch (err) {
     logError("call_session_bridge_error", {
       trace_id: traceId,
-      call_control_id: callControlId,
+      doc_id: docId,
       error: err.message,
     });
   }
