@@ -167,9 +167,29 @@ wss.on("connection", async (phoneWs, req) => {
     : (query.caller ? query.caller.trim().replace(/^(\d)/, "+$1") : null);
   const sessionId = query["session-id"] || null;
   const callControlId = query["call_control_id"] || query["control-id"] || null;
-  const leadName     = query.lead_name     ? decodeURIComponent(query.lead_name).trim()     : null;
-  const leadBusiness = query.lead_business ? decodeURIComponent(query.lead_business).trim() : null;
-  const leadWebsite  = query.lead_website  ? decodeURIComponent(query.lead_website).trim()  : null;
+  let leadName     = query.lead_name     ? decodeURIComponent(query.lead_name).trim()     : null;
+  let leadBusiness = query.lead_business ? decodeURIComponent(query.lead_business).trim() : null;
+  let leadWebsite  = query.lead_website  ? decodeURIComponent(query.lead_website).trim()  : null;
+
+  // For 46elks outbound: the WSS URL is static (configured in dashboard), so lead params
+  // aren't in the query string. Fetch them from telephony-service using the callid.
+  if (isElks && elksHello?.callid && process.env.TELEPHONY_URL) {
+    try {
+      const ctxRes = await fetch(
+        `${process.env.TELEPHONY_URL}/webhooks/elks/context/${encodeURIComponent(elksHello.callid)}`,
+        { signal: AbortSignal.timeout(3000) }
+      );
+      if (ctxRes.ok) {
+        const ctx = await ctxRes.json();
+        leadName     = ctx.lead_name     || leadName;
+        leadBusiness = ctx.lead_business || leadBusiness;
+        leadWebsite  = ctx.lead_website  || leadWebsite;
+        log("elks_context_fetched", { trace_id, callid: elksHello.callid, lead_name: leadName, lead_business: leadBusiness });
+      }
+    } catch (err) {
+      log("elks_context_fetch_failed", { trace_id, error: err.message });
+    }
+  }
 
   const tenantConfig = tenantId ? await loadTenant(tenantId) : null;
   const fallback = !tenantConfig;

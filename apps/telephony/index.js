@@ -33,6 +33,8 @@ app.use(express.json({
   limit: "256kb",
   verify: (req, _res, buf) => { req.rawBody = buf; },
 }));
+// 46elks sends form-encoded bodies in voice_start callbacks.
+app.use(express.urlencoded({ extended: false }));
 
 app.use("/health", healthRouter);
 app.use("/webhooks/telnyx", webhookRouter);

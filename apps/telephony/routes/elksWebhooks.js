@@ -1,9 +1,17 @@
 /**
- * routes/elksWebhooks.js — 46elks webhook callbacks (currently unused for outbound).
+ * routes/elksWebhooks.js — 46elks webhook callbacks.
  *
- * Outbound calls pass a wss:// voice_start URL directly to the 46elks API, so 46elks
- * opens a WebSocket to the bridge without hitting an HTTP webhook first.
- * This file is kept for any future inbound or status webhook needs.
+ * POST /webhooks/elks/voice_start
+ *   Called by 46elks when an outbound call is answered.
+ *   Context (tenant_id, lead params) arrives as query params we set when creating the call.
+ *   Callid arrives in the POST body.
+ *
+ *   We respond { "connect": ELK_FROM_NUMBER } to route audio to the virtual 46elks number,
+ *   which is configured in the 46elks dashboard with voice_start = wss://bridge/elks?tenant=...
+ *   That causes 46elks to open a WebSocket to the bridge with a { t:"hello" } message.
+ *
+ *   Per-call context (lead info, session_id) is stored keyed by callid so the bridge
+ *   can retrieve it via GET /context/:callid after receiving the hello message.
  */
 
 const express = require("express");
@@ -11,49 +19,56 @@ const { log, logError } = require("../lib/log");
 
 const router = express.Router();
 
-function buildElksBridgeWssUrl({ tenantId, callerE164, sessionId, leadName, leadBusiness, leadWebsite }) {
-  const base = process.env.BRIDGE_BASE_URL;
-  if (!base) throw new Error("BRIDGE_BASE_URL is not set");
-  const u = new URL(base);
-  u.protocol = "wss:";
-  u.pathname = "/elks";
-  u.searchParams.set("tenant", tenantId);
-  u.searchParams.set("session-id", sessionId);
-  u.searchParams.set("direction", "outbound");
-  if (callerE164) u.searchParams.set("caller", callerE164);
-  if (leadName)     u.searchParams.set("lead_name",     leadName);
-  if (leadBusiness) u.searchParams.set("lead_business", leadBusiness);
-  if (leadWebsite)  u.searchParams.set("lead_website",  leadWebsite);
-  return u.toString();
+// Short-lived per-call context store: callid → { tenant_id, session_id, lead_name, ... }
+// Entries are deleted when retrieved or after 10 minutes.
+const callContext = new Map();
+
+function storeContext(callid, ctx) {
+  callContext.set(callid, ctx);
+  setTimeout(() => callContext.delete(callid), 10 * 60 * 1000);
 }
 
-// 46elks POSTs form-encoded data when a call is answered.
-// Query params on this URL carry the context we set when initiating the call.
+// Bridge calls this to retrieve lead context after getting callid from the hello message.
+router.get("/context/:callid", (req, res) => {
+  const ctx = callContext.get(req.params.callid);
+  if (!ctx) return res.status(404).json({ error: "context not found" });
+  callContext.delete(req.params.callid);
+  res.json(ctx);
+});
+
+// 46elks POSTs form-encoded data when the outbound call is answered.
+// Query params carry the context we embedded when creating the call.
 router.post("/voice_start", (req, res) => {
   const q = req.query;
-  const tenantId    = q.tenant_id;
-  const sessionId   = q.session_id;
-  const leadName    = q.lead_name    || null;
+  const tenantId     = q.tenant_id    || null;
+  const sessionId    = q.session_id   || null;
+  const leadName     = q.lead_name    || null;
   const leadBusiness = q.lead_business || null;
   const leadWebsite  = q.lead_website  || null;
 
-  // 46elks sends the caller's number in the POST body
-  const callerE164 = req.body?.from || null;
+  // 46elks POSTs form body with callid, from (caller), to (recipient), direction, etc.
   const callid     = req.body?.callid || null;
+  const callerE164 = req.body?.from   || null;
 
-  if (!tenantId || !sessionId) {
+  if (!tenantId || !callid) {
     logError("elks_voice_start_missing_params", { tenantId, sessionId, callid });
-    return res.status(400).json({ error: "missing tenant_id or session_id" });
+    return res.status(400).json({ error: "missing tenant_id or callid" });
   }
 
-  try {
-    const wssUrl = buildElksBridgeWssUrl({ tenantId, callerE164, sessionId, leadName, leadBusiness, leadWebsite });
-    log("elks_voice_start", { tenant_id: tenantId, session_id: sessionId, callid, caller: callerE164, wss_url: wssUrl });
-    res.json({ connect: wssUrl });
-  } catch (err) {
-    logError("elks_voice_start_error", { tenant_id: tenantId, error: err.message });
-    res.status(500).json({ error: err.message });
+  // Store context so bridge can fetch it by callid after WebSocket hello.
+  storeContext(callid, { tenant_id: tenantId, session_id: sessionId, caller: callerE164, lead_name: leadName, lead_business: leadBusiness, lead_website: leadWebsite });
+
+  // Route to our virtual 46elks number, which has voice_start = wss://bridge/elks?tenant=...
+  // configured in the 46elks dashboard. This causes 46elks to open a WebSocket to the bridge.
+  const elksNumber = process.env.ELK_FROM_NUMBER;
+  if (!elksNumber) {
+    logError("elks_voice_start_no_number", { callid });
+    return res.status(500).json({ error: "ELK_FROM_NUMBER not configured" });
   }
+
+  log("elks_voice_start", { tenant_id: tenantId, session_id: sessionId, callid, caller: callerE164, connect_to: elksNumber });
+  res.json({ connect: elksNumber });
 });
 
 module.exports = router;
+module.exports.callContext = callContext;
