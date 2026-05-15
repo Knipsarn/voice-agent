@@ -27,10 +27,20 @@ function logError(event, fields = {}) {
 // ─── Startup constants ────────────────────────────────────────────────────────
 
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
+const XAI_API_KEY = process.env.XAI_API_KEY?.trim() || null;
 const TELNYX_API_KEY = process.env.TELNYX_API_KEY?.trim() || null;
 const DEFAULT_TENANT_ID = process.env.DEFAULT_TENANT_ID || null;
 const DEFAULT_REALTIME_MODEL = process.env.DEFAULT_REALTIME_MODEL || "gpt-realtime-1.5";
 const DEFAULT_VOICE = "alloy";
+
+// Voice → LLM provider routing. The dashboard exposes voices from both OpenAI
+// (marin, cedar) and xAI Grok (eve, ara, rex, sal, leo). The bridge picks the
+// right realtime API based on which voice is selected. xAI's protocol is
+// mostly compatible with OpenAI's GA realtime API; key differences handled below.
+const XAI_VOICES = new Set(["eve", "ara", "rex", "sal", "leo"]);
+function providerForVoice(voice) {
+  return XAI_VOICES.has(voice) ? "xai" : "openai";
+}
 const FALLBACK_INSTRUCTIONS = "You are a helpful phone assistant.";
 const END_CALL_ADDENDUM = "\n\n# Samtalsavslut\nDu har tillgång till funktionen end_call som lägger på luren. Du MÅSTE anropa end_call när: samtalet är klart, uppringaren säger hejdå eller ber dig lägga på, eller ärendet är avslutat och bekräftat. Säg alltid ett kort avsked INNAN du anropar end_call. Säg aldrig hejdå utan att faktiskt anropa end_call — annars hänger samtalet kvar.";
 
@@ -306,16 +316,29 @@ wss.on("connection", async (phoneWs, req) => {
     instructions_length: instructions.length,
   });
 
-  // --- OpenAI Realtime session ---
-  const isGAModel = realtimeModel !== "gpt-realtime-1.5";
+  // --- Realtime session — route by voice → provider ---
+  // xAI Grok voices (eve/ara/rex/sal/leo) → xAI realtime endpoint.
+  // OpenAI voices (marin/cedar/etc) → OpenAI realtime endpoint.
+  const llmProvider = providerForVoice(voice);
+  const isGAModel = llmProvider === "xai" || realtimeModel !== "gpt-realtime-1.5";
+
+  const wsUrl = llmProvider === "xai"
+    ? `wss://api.x.ai/v1/realtime?model=grok-voice-latest`
+    : `wss://api.openai.com/v1/realtime?model=${realtimeModel}`;
+  const wsAuthKey = llmProvider === "xai" ? XAI_API_KEY : OPENAI_API_KEY;
+  if (!wsAuthKey) {
+    logError("llm_api_key_missing", { trace_id, provider: llmProvider });
+    try { phoneWs.close(); } catch (_) {}
+    return;
+  }
 
   const openaiWs = new WebSocket(
-    `wss://api.openai.com/v1/realtime?model=${realtimeModel}`,
+    wsUrl,
     {
       headers: {
-        Authorization: `Bearer ${OPENAI_API_KEY}`,
-        // Beta header required for gpt-realtime-1.5; GA models reject it
-        ...(isGAModel ? {} : { "OpenAI-Beta": "realtime=v1" }),
+        Authorization: `Bearer ${wsAuthKey}`,
+        // OpenAI beta only — xAI and GA OpenAI reject the beta header
+        ...(llmProvider === "openai" && !isGAModel ? { "OpenAI-Beta": "realtime=v1" } : {}),
       }
     }
   );
@@ -329,6 +352,7 @@ wss.on("connection", async (phoneWs, req) => {
     log("openai_ready", {
       trace_id,
       tenant_id: tenantId || null,
+      provider: llmProvider,
       latency_ms: openaiReadyTime - callStart,
     });
 
@@ -350,7 +374,30 @@ wss.on("connection", async (phoneWs, req) => {
 
     let sessionPayload;
 
-    if (isGAModel) {
+    if (llmProvider === "xai") {
+      // xAI Grok realtime — voice at session root, no `type: "realtime"`,
+      // no reasoning field. Audio shape mirrors OpenAI GA otherwise.
+      sessionPayload = {
+        voice,
+        instructions,
+        tools,
+        tool_choice: "auto",
+        audio: {
+          input: {
+            format: gaAudioFormat,
+            turn_detection: {
+              type: "server_vad",
+              threshold: vadThreshold,
+              prefix_padding_ms: prefixPaddingMs,
+              silence_duration_ms: silenceDurationMs,
+            },
+          },
+          output: {
+            format: gaAudioFormat,
+          },
+        },
+      };
+    } else if (isGAModel) {
       // GA API (gpt-realtime-2+) — nested audio object, renamed fields
       sessionPayload = {
         type: "realtime",

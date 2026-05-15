@@ -124,7 +124,12 @@ router.get("/:id", async (req, res) => {
 });
 
 // ── PATCH /tenants/:id/voice ─────────────────────────────────────────────────
-const ALLOWED_VOICES = ["alloy", "ash", "ballad", "cedar", "coral", "echo", "marin", "sage", "shimmer", "verse"];
+const ALLOWED_VOICES = [
+  // OpenAI realtime voices
+  "alloy", "ash", "ballad", "cedar", "coral", "echo", "marin", "sage", "shimmer", "verse",
+  // xAI Grok realtime voices — selecting one of these auto-routes the call to xAI
+  "eve", "ara", "rex", "sal", "leo",
+];
 const ALLOWED_MODELS = ["gpt-realtime-1.5", "gpt-realtime-2"];
 const ALLOWED_REASONING = ["minimal", "low", "medium", "high", "xhigh"];
 

@@ -14,17 +14,27 @@ const MODELS = [
   { id: "gpt-realtime-2",   label: "gpt-realtime-2",   tags: ["BEST", "SMARTER"] },
 ];
 
-// Only the GA voices Marin and Cedar are exposed — they are the newest from OpenAI
-// and the only two that handle Swedish well in our testing. Other voices are hidden
-// to prevent accidental selection of inferior options.
+// Two providers: OpenAI (Marin/Cedar) and xAI Grok (eve/ara/rex/sal/leo).
+// The voice-bridge derives which realtime API to use from the voice ID — picking
+// a Grok voice automatically routes the call to xAI's realtime endpoint.
 const VOICES_BY_MODEL = {
   "gpt-realtime-1.5": [
-    { id: "marin",   label: "Marin",   desc: "Professionell, tydlig", tags: ["GA"] },
-    { id: "cedar",   label: "Cedar",   desc: "Naturlig, konversativ", tags: ["GA"] },
+    { id: "marin",   label: "Marin",   desc: "Professionell, tydlig (OpenAI)",  tags: ["OPENAI"] },
+    { id: "cedar",   label: "Cedar",   desc: "Naturlig, konversativ (OpenAI)",  tags: ["OPENAI"] },
+    { id: "eve",     label: "Eve",     desc: "Kvinnlig, energisk (Grok)",       tags: ["GROK"] },
+    { id: "ara",     label: "Ara",     desc: "Kvinnlig, varm (Grok)",           tags: ["GROK"] },
+    { id: "rex",     label: "Rex",     desc: "Manlig, tydlig (Grok)",           tags: ["GROK"] },
+    { id: "sal",     label: "Sal",     desc: "Neutral, balanserad (Grok)",      tags: ["GROK"] },
+    { id: "leo",     label: "Leo",     desc: "Manlig, auktoritär (Grok)",       tags: ["GROK"] },
   ],
   "gpt-realtime-2": [
-    { id: "marin",   label: "Marin",   desc: "Professionell, tydlig", tags: ["GA", "REC"] },
-    { id: "cedar",   label: "Cedar",   desc: "Naturlig, konversativ", tags: ["GA"] },
+    { id: "marin",   label: "Marin",   desc: "Professionell, tydlig (OpenAI)",  tags: ["OPENAI", "REC"] },
+    { id: "cedar",   label: "Cedar",   desc: "Naturlig, konversativ (OpenAI)",  tags: ["OPENAI"] },
+    { id: "eve",     label: "Eve",     desc: "Kvinnlig, energisk (Grok)",       tags: ["GROK"] },
+    { id: "ara",     label: "Ara",     desc: "Kvinnlig, varm (Grok)",           tags: ["GROK"] },
+    { id: "rex",     label: "Rex",     desc: "Manlig, tydlig (Grok)",           tags: ["GROK"] },
+    { id: "sal",     label: "Sal",     desc: "Neutral, balanserad (Grok)",      tags: ["GROK"] },
+    { id: "leo",     label: "Leo",     desc: "Manlig, auktoritär (Grok)",       tags: ["GROK"] },
   ],
 };
 
