@@ -11,7 +11,7 @@
   "direction": "outbound",
   "first_message_enabled": true,
   "first_message": "Hej {{lead_name}}! Mitt namn är Ulrika, jag är en AI-agent och ringer på uppdrag av Techtell. Har du en minut?",
-  "first_message_delay_ms": 2500,
+  "first_message_delay_ms": 1000,
   "instructions": {
     "base": "$file:configs/prompt-assets/telness-outbound/main-prompt.md",
     "default_mode": "SALES"
