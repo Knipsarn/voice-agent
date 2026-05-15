@@ -91,9 +91,11 @@ const wss = new WebSocketServer({ server });
 wss.on("connection", async (phoneWs, req) => {
   // Use the trace_id supplied by telephony-service (via ?session-id=...) so the
   // call_sessions doc written by telephony seed and the bridge end-of-call append
-  // share the same doc id. Fall back to a new UUID for inbound paths that don't pass one.
+  // share the same doc id. For 46elks the WSS URL is static (configured in the
+  // 46elks dashboard) so session-id isn't in the query — we replace it after the
+  // elks context fetch returns telephony's traceId.
   const initialQuery = url.parse(req.url, true).query;
-  const trace_id = initialQuery["session-id"] || crypto.randomUUID();
+  let trace_id = initialQuery["session-id"] || crypto.randomUUID();
   const callStart = Date.now();
   let openaiReadyTime = null;
   let firstAudioSent = false;
@@ -204,7 +206,7 @@ wss.on("connection", async (phoneWs, req) => {
   let leadWebsite  = query.lead_website  ? decodeURIComponent(query.lead_website).trim()  : null;
 
   // For 46elks outbound: the WSS URL is static (configured in dashboard), so lead params
-  // aren't in the query string. Fetch them from telephony-service using the callid.
+  // and session-id aren't in the query string. Fetch them from telephony-service via callid.
   if (isElks && elksHello?.callid && process.env.TELEPHONY_URL) {
     try {
       const ctxRes = await fetch(
@@ -216,6 +218,11 @@ wss.on("connection", async (phoneWs, req) => {
         leadName     = ctx.lead_name     || leadName;
         leadBusiness = ctx.lead_business || leadBusiness;
         leadWebsite  = ctx.lead_website  || leadWebsite;
+        // Align trace_id with telephony's so call_sessions writes hit the same doc.
+        if (ctx.session_id) {
+          log("elks_trace_id_aligned", { from: trace_id, to: ctx.session_id, callid: elksHello.callid });
+          trace_id = ctx.session_id;
+        }
         log("elks_context_fetched", { trace_id, callid: elksHello.callid, lead_name: leadName, lead_business: leadBusiness });
       }
     } catch (err) {
@@ -382,9 +389,9 @@ wss.on("connection", async (phoneWs, req) => {
     if (llmProvider === "xai") {
       // xAI Grok realtime — voice at session root, no `type: "realtime"`,
       // no reasoning field. Audio shape mirrors OpenAI GA otherwise.
-      // create_response + interrupt_response default to true on OpenAI but
-      // xAI sometimes fails to auto-fire responses — set explicit + use a
-      // server-side watchdog below.
+      // Keep turn_detection minimal: xAI silently rejected our session.update
+      // when create_response/interrupt_response were included, breaking VAD.
+      // Rely on the response_watchdog (lower in this file) to recover.
       sessionPayload = {
         voice,
         instructions,
@@ -398,8 +405,6 @@ wss.on("connection", async (phoneWs, req) => {
               threshold: vadThreshold,
               prefix_padding_ms: prefixPaddingMs,
               silence_duration_ms: silenceDurationMs,
-              create_response: true,
-              interrupt_response: true,
             },
           },
           output: {
