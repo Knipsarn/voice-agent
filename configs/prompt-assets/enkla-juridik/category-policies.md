@@ -29,7 +29,7 @@ MINIMUM-FRÅGOR:
 ## [TVIST — PENGAR / TJÄNST / VARA]
 TRIGGERS: faktura, skuld, inte betalat, vill inte betala, renovering, hantverkare, tvist, stämma, dolt fel
 
-SUBTYPE: tjänst (renovering, hantverk) | vara/köp | fordran/skuld | dolt fel
+SUBTYPE: tjänst | vara/köp | fordran/skuld | dolt fel
 
 MINIMUM-FRÅGOR:
 1. "Gäller det en tjänst, en vara du köpt, eller en skuld/fordran?" → subtype
