@@ -14,28 +14,17 @@ const MODELS = [
   { id: "gpt-realtime-2",   label: "gpt-realtime-2",   tags: ["BEST", "SMARTER"] },
 ];
 
+// Only the GA voices Marin and Cedar are exposed — they are the newest from OpenAI
+// and the only two that handle Swedish well in our testing. Other voices are hidden
+// to prevent accidental selection of inferior options.
 const VOICES_BY_MODEL = {
   "gpt-realtime-1.5": [
-    { id: "alloy",   label: "Alloy",   desc: "Neutral" },
-    { id: "ash",     label: "Ash",     desc: "Tydlig" },
-    { id: "ballad",  label: "Ballad",  desc: "Mjuk" },
-    { id: "coral",   label: "Coral",   desc: "Varm" },
-    { id: "echo",    label: "Echo",    desc: "Djup" },
-    { id: "sage",    label: "Sage",    desc: "Lugn" },
-    { id: "shimmer", label: "Shimmer", desc: "Energisk" },
-    { id: "verse",   label: "Verse",   desc: "Uttrycksfull" },
+    { id: "marin",   label: "Marin",   desc: "Professionell, tydlig", tags: ["GA"] },
+    { id: "cedar",   label: "Cedar",   desc: "Naturlig, konversativ", tags: ["GA"] },
   ],
   "gpt-realtime-2": [
-    { id: "alloy",   label: "Alloy",   desc: "Neutral" },
-    { id: "ash",     label: "Ash",     desc: "Tydlig" },
-    { id: "ballad",  label: "Ballad",  desc: "Mjuk" },
-    { id: "cedar",   label: "Cedar",   desc: "Naturlig",      tags: ["NY"] },
-    { id: "coral",   label: "Coral",   desc: "Varm" },
-    { id: "echo",    label: "Echo",    desc: "Djup" },
-    { id: "marin",   label: "Marin",   desc: "Professionell", tags: ["NY", "REC"] },
-    { id: "sage",    label: "Sage",    desc: "Lugn" },
-    { id: "shimmer", label: "Shimmer", desc: "Energisk" },
-    { id: "verse",   label: "Verse",   desc: "Uttrycksfull" },
+    { id: "marin",   label: "Marin",   desc: "Professionell, tydlig", tags: ["GA", "REC"] },
+    { id: "cedar",   label: "Cedar",   desc: "Naturlig, konversativ", tags: ["GA"] },
   ],
 };
 

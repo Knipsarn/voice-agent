@@ -2,16 +2,8 @@
 import { useState } from "react";
 
 const VOICES = [
-  { id: "alloy",   label: "Alloy",   desc: "Neutral, balanserad" },
-  { id: "ash",     label: "Ash",     desc: "Tydlig, precis" },
-  { id: "ballad",  label: "Ballad",  desc: "Melodisk, mjuk" },
-  { id: "cedar",   label: "Cedar",   desc: "Naturlig, konversativ", requiresV2: true },
-  { id: "coral",   label: "Coral",   desc: "Varm, vänlig" },
-  { id: "echo",    label: "Echo",    desc: "Resonant, djup" },
-  { id: "marin",   label: "Marin",   desc: "Professionell, tydlig", requiresV2: true },
-  { id: "sage",    label: "Sage",    desc: "Lugn, genomtänkt" },
-  { id: "shimmer", label: "Shimmer", desc: "Ljus, energisk" },
-  { id: "verse",   label: "Verse",   desc: "Mångsidig, uttrycksfull" },
+  { id: "marin",   label: "Marin",   desc: "Professionell, tydlig (GA, bäst för svenska)", requiresV2: true },
+  { id: "cedar",   label: "Cedar",   desc: "Naturlig, konversativ (GA, bäst för svenska)", requiresV2: true },
 ];
 
 export function VoicePicker({ tenantId, initialVoice, currentModel }) {

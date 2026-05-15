@@ -253,7 +253,9 @@ wss.on("connection", async (phoneWs, req) => {
 
   // Inject prior call context if this caller has a case on file for this tenant.
   // Gives the agent awareness of previous calls without manual memory management.
-  if (!fallback && callerNumber) {
+  // Skipped for outbound — we initiated the call, "prior case history" is irrelevant
+  // and the Firestore compound query was adding ~5s of latency before first audio.
+  if (!fallback && callerNumber && tenantConfig.direction !== "outbound") {
     const priorContext = await fetchPriorCaseContext(callerNumber, tenantId);
     if (priorContext) instructions += priorContext;
   }
