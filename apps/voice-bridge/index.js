@@ -119,6 +119,11 @@ wss.on("connection", async (phoneWs, req) => {
   let phoneAudioActiveUntil = 0;         // ms timestamp; phone audio likely still playing until then
   let assistantAudioMsThisResponse = 0;  // audio duration emitted in the current response (for end_call guard)
 
+  // Provider response-watchdog: if audio_committed fires but no response.created
+  // event arrives within 2s, manually trigger one. xAI's server VAD has been
+  // observed dropping auto-response on some turns.
+  let responseWatchdog = null;
+
   // OpenAI Realtime usage accumulator — summed across all response.done events
   // in this call. Used by the post-processor to compute exact cost per call
   // instead of the per-minute estimate.
@@ -377,6 +382,9 @@ wss.on("connection", async (phoneWs, req) => {
     if (llmProvider === "xai") {
       // xAI Grok realtime — voice at session root, no `type: "realtime"`,
       // no reasoning field. Audio shape mirrors OpenAI GA otherwise.
+      // create_response + interrupt_response default to true on OpenAI but
+      // xAI sometimes fails to auto-fire responses — set explicit + use a
+      // server-side watchdog below.
       sessionPayload = {
         voice,
         instructions,
@@ -390,6 +398,8 @@ wss.on("connection", async (phoneWs, req) => {
               threshold: vadThreshold,
               prefix_padding_ms: prefixPaddingMs,
               silence_duration_ms: silenceDurationMs,
+              create_response: true,
+              interrupt_response: true,
             },
           },
           output: {
@@ -571,6 +581,20 @@ wss.on("connection", async (phoneWs, req) => {
 
         case "input_audio_buffer.committed":
           log("audio_committed", { trace_id, tenant_id: tenantId || null });
+          // Watchdog: xAI's server_vad occasionally fails to auto-fire response.create
+          // after user audio commits. If no response.created event arrives within 2s,
+          // we manually trigger one. Cleared by the response.created case below.
+          if (responseWatchdog) clearTimeout(responseWatchdog);
+          responseWatchdog = setTimeout(() => {
+            if (!transferFired && openaiWs.readyState === WebSocket.OPEN) {
+              logError("response_watchdog_fired", {
+                trace_id, tenant_id: tenantId || null,
+                provider: llmProvider,
+                reason: "no_response_after_audio_commit_2s",
+              });
+              try { openaiWs.send(JSON.stringify({ type: "response.create" })); } catch (_) {}
+            }
+          }, 2000);
           break;
 
         case "conversation.item.created":
@@ -601,6 +625,7 @@ wss.on("connection", async (phoneWs, req) => {
           break;
 
         case "response.created":
+          if (responseWatchdog) { clearTimeout(responseWatchdog); responseWatchdog = null; }
           log("response_started", {
             trace_id, tenant_id: tenantId || null,
             turn_assistant: turnCountAssistant + 1,
