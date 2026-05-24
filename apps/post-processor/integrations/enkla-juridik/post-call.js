@@ -160,6 +160,9 @@ module.exports = async function enklaJuridikPostCall({ call, summary }) {
       ...(summaryText && { summary: appendSummary(null, summaryText) }),
       status: "WAITING_SMS",
       active: true,
+      // Explicit null (not absent) so the 12h Pipefy backstop's `pipefy_card_id == null`
+      // query actually matches this case — Firestore `== null` does NOT match absent fields.
+      pipefy_card_id: null,
       reminder_count: 0,
       email_request_count: 0,
       last_call_at: now,

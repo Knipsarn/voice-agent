@@ -69,16 +69,12 @@ router.post("/auto-sync", async (req, res) => {
     const firestore = getDb();
     const cutoff = Timestamp.fromMillis(Date.now() - TWELVE_HOURS_MS);
 
-    // ── Batch A: no pipefy_card_id, created > 12h ago ──────────────────────
-    // Firestore does not support "field does not exist" natively, but documents
-    // without the field will NOT match a == or != filter. We use two queries:
-    //   1. pipefy_card_id == null  (explicitly set to null)
-    //   2. pipefy_card_id == ""    (empty string, defensive)
-    // Cases that simply never had the field set will appear in neither filter
-    // when compared with == null on a missing field. Firestore actually DOES
-    // return documents where the field is missing when you filter == null, so
-    // a single `where("pipefy_card_id", "==", null)` covers both "missing" and
-    // "explicitly null". See Firestore docs: missing fields equal null in queries.
+    // ── Batch A: no Pipefy card yet, last call > 12h ago ───────────────────
+    // IMPORTANT: Firestore `== null` matches docs where the field is present and
+    // null, but NOT docs where the field is entirely absent. So every case MUST be
+    // created with `pipefy_card_id: null` (see post-call.js) for this query to find
+    // it. Cases created before that contract was added were backfilled manually.
+    // Backed by the composite index (pipefy_card_id, last_call_at).
 
     const batchASnap = await firestore
       .collection("cases")
