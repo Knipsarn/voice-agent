@@ -9,6 +9,14 @@
       ]
     },
     {
+      "collectionGroup": "call_sessions",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "tenant_id", "order": "ASCENDING" },
+        { "fieldPath": "initiated_at", "order": "ASCENDING" }
+      ]
+    },
+    {
       "collectionGroup": "sms_sessions",
       "queryScope": "COLLECTION",
       "fields": [
@@ -24,6 +32,14 @@
       "fields": [
         { "fieldPath": "tenant_id", "order": "ASCENDING" },
         { "fieldPath": "sent_at", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "sms_sessions",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "tenant_id", "order": "ASCENDING" },
+        { "fieldPath": "sent_at", "order": "ASCENDING" }
       ]
     },
     {
