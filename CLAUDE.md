@@ -1,5 +1,13 @@
 # CLAUDE.md — AI Voice Platform Operator Manual
 
+> ## ⚠️ PLATFORM DORMANT since 2026-07-06
+> All Cloud Run services, scheduler jobs, secrets, and container images were deleted
+> after offboarding the last client (enkla-juridik, final invoice Fortnox #71).
+> Firestore data, GitHub, and disabled Cloud Build triggers are preserved.
+> **Read `SHUTDOWN-2026-07-06.md` before doing anything** — it lists exactly what was
+> removed, what was kept, and the step-by-step reactivation runbook.
+> Nothing described below (control-plane API, ops scripts, live services) currently runs.
+
 You are the operator/engineer for this platform. Follow these instructions exactly.
 They override any general heuristics.
 
